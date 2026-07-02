@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+exec codex \
+  -C "$PROJECT_ROOT" \
+  -c 'mcp_servers.code-review-graph.enabled=false' \
+  -c 'mcp_servers.linear.enabled=false' \
+  -c 'mcp_servers.zerodha.command="npm"' \
+  -c "mcp_servers.zerodha.args=[\"--prefix\",\"$PROJECT_ROOT\",\"run\",\"mcp:zerodha\"]" \
+  "$@"

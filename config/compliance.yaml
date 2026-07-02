@@ -1,0 +1,10 @@
+live_trading_enabled: false
+requires_static_ip_before_live: true
+max_orders_per_second: 10
+require_algo_tag_before_live: true
+require_market_order_protection: true
+audit_trail_required: true
+daily_access_token_expected: true
+secret_handling:
+  forbid_env_file_inspection: true
+  forbid_secret_logging: true

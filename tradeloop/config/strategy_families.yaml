@@ -1,0 +1,21 @@
+families:
+  - id: post_earnings_drift
+    description: Long after a clean results beat with sector tailwind
+    typical_horizon_days: [5, 15]
+    requires: [tier_A_news, fundamentals_green_or_yellow, RSI_not_overbought]
+  - id: breakout_20d_pullback
+    description: 20-day high breakout, enter on first pullback to breakout level
+    typical_horizon_days: [3, 10]
+    requires: [volume_confirmation, ATR_stop]
+  - id: ema_trend_pullback
+    description: Uptrend with price above EMA50 above EMA200, enter on pullback to EMA20
+    typical_horizon_days: [5, 20]
+    requires: [no_negative_news, sector_strength]
+  - id: results_day_momentum
+    description: Intraday-managed swing after results-day gap with volume
+    typical_horizon_days: [1, 5]
+    requires: [results_today_or_prior_day, volume_spike, tier_A_confirmation]
+  - id: sector_rotation_leader
+    description: Buy the strongest name in a freshly leading sector
+    typical_horizon_days: [10, 20]
+    requires: [sector_breadth_strong, name_at_relative_strength_high]

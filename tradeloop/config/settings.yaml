@@ -1,0 +1,70 @@
+capital:
+  paper_starting_inr: 100000
+  per_trade_risk_pct: 1.5
+  max_open_risk_pct: 4.0
+  max_concurrent_positions: 4
+  min_position_size_inr: 15000
+  max_position_pct: 25
+  max_sector_exposure_pct: 40
+  daily_drawdown_circuit_pct: 3
+
+modes:
+  premarket:
+    enabled: true
+    full_pipeline: true
+    new_entries_allowed: true
+  intraday:
+    enabled: true
+    manage_only: true
+    new_entries_allowed: false
+  postclose:
+    enabled: true
+    learning_only: true
+  adhoc:
+    enabled: true
+    full_pipeline: true
+    user_request_required: true
+
+universe:
+  base_index: NIFTY500
+  include_indices_as_context: [NIFTY50, BANKNIFTY, NIFTYIT, NIFTYAUTO, NIFTYPHARMA, NIFTYFMCG]
+  min_avg_daily_turnover_cr: 5
+  exclude_segments: [SME, ETF_LEVERAGED]
+
+shortlist:
+  target_size: 12
+  news_driven_share: 0.7
+  technical_driven_share: 0.3
+
+trading:
+  segment: EQ
+  allowed_products: [CNC, MIS]
+  side: LONG_ONLY
+  zerodha_enable_trading: false
+
+costs:
+  cnc_brokerage_inr: 0
+  mis_brokerage_inr_max: 20
+  mis_brokerage_pct: 0.0003
+  stt_sell_cnc_pct: 0.001
+  stt_sell_mis_pct: 0.00025
+  stamp_buy_cnc_pct: 0.00015
+  stamp_buy_mis_pct: 0.00003
+  gst_pct: 0.18
+  dp_charge_inr_per_scrip: 15.93
+  slippage_bps:
+    nifty50: 5
+    next50: 10
+    midcap150: 15
+    other: 25
+
+memory:
+  lessons_dedupe_similarity: 0.8
+  strategy_min_trades_for_trust: 10
+  dossier_curation_cadence_days: 7
+
+live_promotion_gates:
+  min_paper_trades: 40
+  min_win_rate: 0.45
+  min_expectancy_r: 0.3
+  max_drawdown_pct: 8

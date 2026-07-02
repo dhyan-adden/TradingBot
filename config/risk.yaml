@@ -1,0 +1,12 @@
+profile: moderate_growth
+paper_capital_inr: 100000
+max_open_positions: 5
+max_position_allocation_pct: 20
+max_total_deployed_pct: 60
+allow_leverage: false
+allow_short_selling: false
+max_daily_new_positions: 2
+kill_switch:
+  enabled: true
+  max_daily_loss_pct: 2
+  max_total_drawdown_pct: 8

@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "TradeLoop: Premarket",
+      "type": "shell",
+      "command": "./tradeloop/scripts/run_cycle_logged.sh premarket",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "TradeLoop: Intraday",
+      "type": "shell",
+      "command": "./tradeloop/scripts/run_cycle_logged.sh intraday",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "TradeLoop: Postclose",
+      "type": "shell",
+      "command": "./tradeloop/scripts/run_cycle_logged.sh postclose",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "TradeLoop: Adhoc",
+      "type": "shell",
+      "command": "./tradeloop/scripts/run_cycle_logged.sh adhoc \"${input:adhocRequest}\"",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "adhocRequest",
+      "type": "promptString",
+      "description": "TradeLoop adhoc request",
+      "default": "Analyze RELIANCE for a long-only swing setup"
+    }
+  ]
+}

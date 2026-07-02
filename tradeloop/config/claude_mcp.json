@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zerodha": {
+      "command": "npm",
+      "args": ["--prefix", ".", "run", "mcp:zerodha"]
+    }
+  }
+}

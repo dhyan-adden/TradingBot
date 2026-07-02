@@ -1,0 +1,26 @@
+mode: paper
+market: india
+timezone: Asia/Kolkata
+currency: INR
+broker: zerodha
+data:
+  primary_source: yfinance
+  fallback_source: zerodha
+  candle_interval: 1d
+  quote_source: yfinance
+  poll_interval_seconds: 60
+  vendors:
+    quotes: yfinance,zerodha
+    candles: yfinance,zerodha
+    indicators: yfinance
+    fundamentals: yfinance
+    news: yfinance
+  benchmarks:
+    NSE: ^NSEI
+    BSE: ^BSESN
+  symbol_suffixes:
+    NSE: .NS
+    BSE: .BO
+state:
+  sqlite_path: state/trading.db
+  memory_root: memory

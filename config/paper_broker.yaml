@@ -1,0 +1,16 @@
+starting_cash_inr: 100000
+order_id_prefix: PAPER
+default_quantity: 1
+allow_fractional_quantity: false
+fill_model:
+  market_fill: next_available_ltp
+  limit_fill: price_touch
+  slippage_bps: 5
+  gap_open_policy: fill_at_open_with_slippage
+settlement:
+  product: CNC
+  t_plus_days: 1
+reject_if:
+  insufficient_cash: true
+  symbol_not_in_universe: true
+  market_closed: true

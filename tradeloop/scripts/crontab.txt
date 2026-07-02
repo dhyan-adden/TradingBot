@@ -1,0 +1,3 @@
+SHELL=/bin/bash
+PATH=/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+* * * * * cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/cron_dispatch.sh >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1

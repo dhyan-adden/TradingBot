@@ -1,0 +1,20 @@
+tier_A:
+  - reuters_india_business
+  - bloomberg_quint
+  - mint_markets
+  - business_standard_markets
+  - economic_times_markets
+  - bse_announcements
+  - nse_announcements
+
+tier_B:
+  - moneycontrol_news
+  - cnbc_tv18
+  - livemint_companies
+  - financial_express
+
+tier_C:
+  - google_news_generic
+  - reddit_indianstreetbets
+  - reddit_indiainvestments
+  - stocktwits_india

@@ -1,0 +1,44 @@
+base_index: NIFTY500
+indices_context:
+  - NIFTY50
+  - BANKNIFTY
+  - NIFTYIT
+  - NIFTYAUTO
+  - NIFTYPHARMA
+  - NIFTYFMCG
+symbols:
+  - symbol: RELIANCE
+    name: Reliance Industries
+    sector: Energy
+    industry: Oil, Gas & Consumable Fuels
+    isin: INE002A01018
+    bucket: nifty50
+  - symbol: TCS
+    name: Tata Consultancy Services
+    sector: Information Technology
+    industry: IT Services
+    isin: INE467B01029
+    bucket: nifty50
+  - symbol: HDFCBANK
+    name: HDFC Bank
+    sector: Financial Services
+    industry: Bank
+    isin: INE040A01034
+    bucket: nifty50
+  - symbol: INFY
+    name: Infosys
+    sector: Information Technology
+    industry: IT Services
+    isin: INE009A01021
+    bucket: nifty50
+  - symbol: ICICIBANK
+    name: ICICI Bank
+    sector: Financial Services
+    industry: Bank
+    isin: INE090A01021
+    bucket: nifty50
+watchlist:
+  - symbol: SBIN
+    name: State Bank of India
+    sector: Financial Services
+    bucket: nifty50

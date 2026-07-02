@@ -1,0 +1,26 @@
+event_log:
+  append_only: true
+  source_of_truth: sqlite
+markdown:
+  root: memory
+  generated_projection: true
+  require_source_event_hash: true
+  atomic_writes: true
+  refuse_overwrite_on_manual_edit: true
+  dry_run_supported: true
+lesson_taxonomy:
+  mistake_classes:
+    - entered_against_trend
+    - stop_too_tight
+    - stop_too_wide
+    - sized_too_large
+    - chased_after_gap
+    - held_through_earnings
+    - ignored_volume_dryup
+  insight_classes:
+    - regime_detection_worked
+    - exit_discipline_held
+    - sizing_appropriate_for_volatility
+scorecards:
+  default_window_trades: 30
+  trusted_min_sample_size: 20

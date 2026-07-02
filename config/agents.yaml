@@ -1,0 +1,141 @@
+# Only the four OpenRouter models below may be used. Provider is OpenRouter
+# (chat/completions). Decisions -> minimax-m3, analysts -> deepseek-v4-flash,
+# fundamentals -> mimo-v2.5, light classification -> hy3-preview.
+model_provider:
+  enabled: true
+  provider: openrouter
+  api_key_env: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  default_model: deepseek/deepseek-v4-flash
+  max_tokens: 2000
+agents:
+  market_analyst:
+    model: deepseek/deepseek-v4-flash
+    can_read:
+      - config
+      - market_data
+    can_write:
+      - event_log.agent_report.market
+    can_execute_orders: false
+  news_analyst:
+    model: deepseek/deepseek-v4-flash
+    can_read:
+      - config
+      - market_news
+    can_write:
+      - event_log.agent_report.news
+    can_execute_orders: false
+  fundamentals_analyst:
+    model: xiaomi/mimo-v2.5
+    can_read:
+      - config
+      - fundamentals
+    can_write:
+      - event_log.agent_report.fundamentals
+    can_execute_orders: false
+  sentiment_analyst:
+    enabled: false
+    model: tencent/hy3-preview
+    can_read:
+      - config
+      - market_sentiment
+    can_write:
+      - event_log.agent_report.sentiment
+    can_execute_orders: false
+  bull_researcher:
+    model: minimax/minimax-m3
+    can_read:
+      - agent_reports
+      - memory.decision_context
+    can_write:
+      - event_log.debate.bull
+    can_execute_orders: false
+  bear_researcher:
+    model: minimax/minimax-m3
+    can_read:
+      - agent_reports
+      - memory.decision_context
+    can_write:
+      - event_log.debate.bear
+    can_execute_orders: false
+  research_manager:
+    model: minimax/minimax-m3
+    can_read:
+      - debate.bull_bear
+      - agent_reports
+    can_write:
+      - event_log.research_plan
+    can_execute_orders: false
+  signal_agent:
+    model: deepseek/deepseek-v4-flash
+    can_read:
+      - config
+      - market_data
+      - memory.scorecards
+    can_write:
+      - event_log.signal_generated
+    can_execute_orders: false
+  risk_agent:
+    model: deepseek/deepseek-v4-flash
+    can_read:
+      - config
+      - event_log
+    can_write:
+      - event_log.risk_decision
+    can_execute_orders: false
+  trader_agent:
+    model: minimax/minimax-m3
+    can_read:
+      - research_plan
+      - market_data
+      - risk_config
+    can_write:
+      - event_log.trader_proposal
+    can_execute_orders: false
+  portfolio_manager:
+    model: minimax/minimax-m3
+    can_read:
+      - trader_proposal
+      - risk_debate
+      - portfolio
+      - memory.decision_context
+    can_write:
+      - event_log.portfolio_decision
+    can_execute_orders: false
+  execution_agent:
+    model: deepseek/deepseek-v4-flash
+    can_read:
+      - approved_orders
+      - config.paper_broker
+    can_write:
+      - event_log.paper_order
+    can_execute_orders: paper_only
+  trade_journal_agent:
+    model: tencent/hy3-preview
+    can_read:
+      - event_log
+      - config
+    can_write:
+      - memory.trades
+      - memory.daily
+    can_execute_orders: false
+  post_trade_learning_agent:
+    model: minimax/minimax-m3
+    can_read:
+      - memory.trades
+      - memory.daily
+      - config
+    can_write:
+      - memory.lessons
+      - memory.proposals
+    can_execute_orders: false
+    can_write_config: false
+  supervisor_agent:
+    model: tencent/hy3-preview
+    can_read:
+      - event_log
+      - config
+      - risk_decisions
+    can_write:
+      - event_log.supervisor_decision
+    can_execute_orders: false

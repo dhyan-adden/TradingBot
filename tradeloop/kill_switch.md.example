@@ -1,0 +1,6 @@
+# Kill Switch
+
+Rename this file to `kill_switch.md` in `tradeloop/` to halt all broker
+routing. When present, router execution must abort regardless of environment
+flags or portfolio-manager approval.
+

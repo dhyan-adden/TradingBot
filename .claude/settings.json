@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda info *)",
+      "Read(//Users/dhyanpatel/anaconda3/envs/**)",
+      "Read(//Users/dhyanpatel/miniconda3/**)",
+      "Read(//Users/dhyanpatel/miniforge3/**)",
+      "Bash(df -h /Volumes/D-DRIVE && ls /Volumes/D-DRIVE/)",
+      "Read(//Volumes/D-DRIVE/**)"
+    ]
+  }
+}

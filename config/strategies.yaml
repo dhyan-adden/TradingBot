@@ -1,0 +1,20 @@
+strategies:
+  - name: daily_breakout_v1
+    enabled: true
+    paper_entry_enabled: true
+    timeframe: day
+    side: long_only
+    entry:
+      type: breakout
+      lookback_days: 20
+    exit:
+      stop_loss_pct: 2
+      target_pct: 5
+      max_holding_days: 10
+    sizing:
+      risk_per_trade_pct: 1
+    learning_adjustable:
+      - entry.lookback_days
+      - exit.stop_loss_pct
+      - exit.target_pct
+      - exit.max_holding_days

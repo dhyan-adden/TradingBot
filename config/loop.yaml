@@ -1,0 +1,25 @@
+enabled: true
+mode: continuous
+dry_run_default: false
+poll_interval_seconds: 60
+market_hours:
+  timezone: Asia/Kolkata
+  start: "09:15"
+  end: "15:30"
+allow_once_outside_market_hours: true
+max_cycles: null
+max_symbols_per_cycle: 10
+auto_paper_orders: true
+autonomous:
+  enabled: true
+  discovery_query: "NSE stocks India market today"
+  max_shortlist: 5
+  per_symbol_news_limit: 3
+  source: google_news_rss
+execution:
+  order_gate:
+    mode: autopilot
+    cancel_window_seconds: 30
+learning:
+  rule_first: true
+  codex_review: advisory_markdown

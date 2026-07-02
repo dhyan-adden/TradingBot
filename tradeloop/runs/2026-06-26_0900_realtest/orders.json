@@ -1,0 +1,31 @@
+{
+  "mode": "PAPER",
+  "live_orders_enabled": false,
+  "run": "2026-06-26_0900_realtest",
+  "generated_by": "tradeloop-pm",
+  "orders": [],
+  "held": [
+    {
+      "ticker": "HDFCBANK",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 30,
+      "order_type": "LIMIT",
+      "price": 800.0,
+      "max_entry_price": 805.0,
+      "hard_stop": 775.0,
+      "target_1": 820.0,
+      "target_2": 835.0,
+      "strategy_family": "breakout_20d_pullback",
+      "status": "APPROVED_HELD",
+      "reason": "PM approved at 30 sh (risk-resized, all limits PASS) but NOT routed: Zerodha 403 TokenException on quote/positions/holdings/margins this run. No live LTP, no intraday trigger confirmation, no broker-state verification. Conditional gate unmet.",
+      "gate": [
+        "live Kite session restored (no 403) and live LTP read",
+        "intraday hold > 799.50 on volume OR stabilisation 788-793 above SMA20",
+        "fill price <= 805.00 else stand down for the session",
+        "live broker re-check: cash covers ~24150, open positions <= 3, banking sector < 40%, day P&L above -3% circuit",
+        "disqualify if open < 788 and fails to recover, gap > 805 without volume, or NIFTY breaks 23900"
+      ]
+    }
+  ]
+}
