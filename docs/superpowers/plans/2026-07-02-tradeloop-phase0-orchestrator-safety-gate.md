@@ -2,6 +2,8 @@
 
 **Goal:** Make `evaluate()` run on every order before routing, enforce all hard caps in code, persist the paper book across cycles, and turn the holiday/kill-switch/promotion gates into real branches — all behind a Python orchestrator (`python -m tradeloop.orchestrator <mode>`), paper by default.
 
+**2026-07-03 verification patch (plan verified line-by-line against the codebase):** (1) book persistence wired into `run_cycle` — new FILLED fills now `append()`ed after routing (was never called anywhere; positions would not have survived cycles); (2) Task 12 e2e BUY resized to ₹20,000 (was ₹10,000, below `min_position_size_inr` 15000 → would have been RISK_REJECTED); (3) `hydrate()` restores `slippage_bps` for NEW orders after replaying at 0; (4) NSE 2026 holiday list corrected to the official 16 weekday closures (source: NSE circular CMTR71775; the old list had 3 wrong dates, missed Jan 15 + Jun 26, and flagged 2 real trading days as holidays) and `is_nse_holiday` now also gates weekends; (5) master-prompt phrase "do not write fills.json" made contiguous so Task 8's substring test passes; (6) cost_model settings-drift tripwire test added to Task 4 (full refactor stays deferred).
+
 **Architecture:** A single Python orchestrator owns the cycle: it loads typed `Settings` from `config/settings.yaml`, runs three halt-gates (holiday / kill-switch / live-not-ready) as real branches, takes a global lockfile with a per-cycle timeout, scaffolds the run dir via existing `prepare_cycle.prepare`, runs the unchanged external reasoning backend behind a `_run_reasoning` seam, then runs a deterministic order path. The order path hydrates a persisted append-only JSONL paper book, parses the real `orders.json` object shape into typed `Order`/`OrdersFile`, builds `RiskState`+`RiskCaps` from the book + settings + universe, calls the existing `evaluate()` gate on every order, routes only approved orders through the existing `PaperBroker`, writes `fills.json`, and logs each gate verdict to `decisions.jsonl`.
 
 **Tech Stack:** Python 3.11, pydantic v2 (already a dep), PyYAML + pandas (declared this phase), pytest with recorded fixtures only (no live network), stdlib `subprocess`/`fcntl`/`threading` for the orchestrator control flow.
@@ -116,15 +118,17 @@ from datetime import date
 from tradeloop.lib.util.holidays import NSE_HOLIDAYS_2026, is_nse_holiday
 
 
-def test_republic_day_2026_is_a_holiday() -> None:
-    assert is_nse_holiday(date(2026, 1, 26)) is True
-    assert date(2026, 8, 15) in NSE_HOLIDAYS_2026  # Independence Day
-    assert is_nse_holiday(date(2026, 7, 1)) is False  # ordinary weekday
-    assert len(NSE_HOLIDAYS_2026) >= 12
+def test_nse_2026_holiday_gate() -> None:
+    assert is_nse_holiday(date(2026, 1, 26)) is True   # Republic Day
+    assert is_nse_holiday(date(2026, 6, 26)) is True   # Muharram
+    assert is_nse_holiday(date(2026, 3, 26)) is True   # Ram Navami (Thu — corrected date)
+    assert is_nse_holiday(date(2026, 7, 1)) is False   # ordinary Wednesday
+    assert is_nse_holiday(date(2026, 7, 4)) is True    # Saturday — weekend gate
+    assert len(NSE_HOLIDAYS_2026) == 16
 ```
 2. Run it — expect FAIL:
 ```
-python -m pytest tradeloop/tests/test_orchestrator.py::test_republic_day_2026_is_a_holiday -q
+python -m pytest tradeloop/tests/test_orchestrator.py::test_nse_2026_holiday_gate -q
 ```
 Expected: `assert False is True` (set is empty).
 3. Minimal implementation — replace the body of `tradeloop/lib/util/holidays.py`:
@@ -132,23 +136,24 @@ Expected: `assert False is True` (set is empty).
 from datetime import date
 
 
-# NSE trading holidays 2026 (full-day equity segment closures).
+# NSE trading holidays 2026 — full-day equity-segment closures per NSE circular
+# CMTR71775 (verified 2026-07-03 against two independent sources). Weekday
+# closures only; weekends are gated by is_nse_holiday itself. Muhurat trading
+# (Sun 2026-11-08) is NOT listed — it is a special session on a non-trading day.
 NSE_HOLIDAYS_2026: set[date] = {
+    date(2026, 1, 15),   # Maharashtra municipal elections
     date(2026, 1, 26),   # Republic Day
-    date(2026, 2, 16),   # Maha Shivratri
     date(2026, 3, 3),    # Holi
-    date(2026, 3, 21),   # Id-Ul-Fitr (Ramzan Id)
-    date(2026, 3, 27),   # Ram Navami
-    date(2026, 4, 1),    # Mahavir Jayanti
+    date(2026, 3, 26),   # Shri Ram Navami
+    date(2026, 3, 31),   # Shri Mahavir Jayanti
     date(2026, 4, 3),    # Good Friday
     date(2026, 4, 14),   # Dr. Ambedkar Jayanti
     date(2026, 5, 1),    # Maharashtra Day
-    date(2026, 5, 27),   # Bakri Id
-    date(2026, 8, 15),   # Independence Day
+    date(2026, 5, 28),   # Bakri Id
+    date(2026, 6, 26),   # Muharram
     date(2026, 9, 14),   # Ganesh Chaturthi
     date(2026, 10, 2),   # Gandhi Jayanti
     date(2026, 10, 20),  # Dussehra
-    date(2026, 11, 9),   # Diwali (Laxmi Pujan)
     date(2026, 11, 10),  # Diwali Balipratipada
     date(2026, 11, 24),  # Guru Nanak Jayanti
     date(2026, 12, 25),  # Christmas
@@ -158,11 +163,12 @@ NSE_HOLIDAYS_2026: set[date] = {
 
 
 def is_nse_holiday(day: date) -> bool:
-    return day in NSE_HOLIDAYS_2026
+    """True when the NSE equity segment is closed: weekends or a listed holiday."""
+    return day.weekday() >= 5 or day in NSE_HOLIDAYS_2026
 ```
 4. Run pass:
 ```
-python -m pytest tradeloop/tests/test_orchestrator.py::test_republic_day_2026_is_a_holiday -q
+python -m pytest tradeloop/tests/test_orchestrator.py::test_nse_2026_holiday_gate -q
 ```
 Expected: `1 passed`.
 5. Commit:
@@ -256,6 +262,21 @@ def test_load_settings_and_risk_caps_mapping() -> None:
     assert caps.max_open_risk_pct == 4.0
     assert caps.min_position_size_inr == 15000
     assert set(caps.universe) == {"RELIANCE", "TCS"}
+
+
+def test_cost_model_defaults_match_settings_costs() -> None:
+    # ponytail: cost_model keeps its hardcoded defaults in P0 (spec §5.1 refactor
+    # deferred); this tripwire fails the suite if they ever drift from settings.yaml.
+    import inspect
+
+    from tradeloop.lib.broker.cost_model import estimate_cost
+
+    params = inspect.signature(estimate_cost).parameters
+    costs = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))["costs"]
+    for key in ["cnc_brokerage_inr", "mis_brokerage_inr_max", "mis_brokerage_pct",
+                "stt_sell_cnc_pct", "stt_sell_mis_pct", "stamp_buy_cnc_pct",
+                "stamp_buy_mis_pct", "gst_pct", "dp_charge_inr_per_scrip"]:
+        assert params[key].default == costs[key], key
 ```
 2. Run it — expect FAIL:
 ```
@@ -326,7 +347,7 @@ def risk_caps(settings: Settings, universe: Iterable[str], capital_inr: float) -
 ```
 python -m pytest tradeloop/tests/test_config.py -q
 ```
-Expected: `2 passed`.
+Expected: `3 passed`.
 5. Commit:
 ```
 git commit -am "P0: typed Settings loader + risk_caps() mapping from settings.yaml"
@@ -535,6 +556,7 @@ def test_missing_book_starts_empty(tmp_path: Path) -> None:
     broker = hydrate(tmp_path / "nope.jsonl", starting_cash_inr=50000)
     assert broker.positions == {}
     assert broker.cash_inr == 50000
+    assert broker.slippage_bps == 5  # restored for NEW orders (replay itself runs at 0)
 ```
 2. Run it — expect FAIL:
 ```
@@ -549,13 +571,16 @@ from pathlib import Path
 from tradeloop.lib.broker.paper_broker import Fill, OrderTicket, PaperBroker
 
 
-def hydrate(book_path: Path, starting_cash_inr: float) -> PaperBroker:
+def hydrate(book_path: Path, starting_cash_inr: float, slippage_bps: float = 5) -> PaperBroker:
     """Rebuild a PaperBroker by replaying every persisted FILLED fill through
-    the broker's own fill math (slippage_bps=0 so a stored fill reproduces
-    exactly). Missing book file => empty book at starting cash (first run)."""
+    the broker's own fill math. Replay runs at slippage 0 so a stored fill
+    reproduces exactly; the broker is handed back at `slippage_bps` so NEW
+    orders keep realistic slippage. Missing book file => empty book at
+    starting cash (first run)."""
     broker = PaperBroker(cash_inr=float(starting_cash_inr), slippage_bps=0)
     path = Path(book_path)
     if not path.exists():
+        broker.slippage_bps = float(slippage_bps)
         return broker
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -573,6 +598,7 @@ def hydrate(book_path: Path, starting_cash_inr: float) -> PaperBroker:
                 product=str(rec.get("product", "CNC")),
             )
         )
+    broker.slippage_bps = float(slippage_bps)
     return broker
 
 
@@ -879,10 +905,10 @@ python -m pytest tradeloop/tests/test_orchestrator.py::test_master_prompt_hands_
 Expected: `assert ... in text` fails.
 3. Minimal implementation — edit `tradeloop/prompts/00_master_orchestrator.md`. Replace step 7 of "Required stage order":
 ```
-7. Stop after writing `orders.json`. Do not route orders and do not write
-   `fills.json`. Broker routing is a separate deterministic Python step
-   (`tradeloop.orchestrator`) that reads only `orders.json`, runs the risk gate
-   on every order, and writes `fills.json` + `decisions.jsonl`.
+7. Stop after writing `orders.json`. Do not route orders. Do not write fills.json.
+   Broker routing is a separate deterministic Python step (`tradeloop.orchestrator`)
+   that reads only `orders.json`, runs the risk gate on every order, and writes
+   `fills.json` + `decisions.jsonl`.
 ```
 Edit `tradeloop/prompts/41_portfolio_manager.md`. Replace the "Writes" line and closing sentence:
 ```
@@ -1071,7 +1097,8 @@ import json
 import sys
 from contextlib import contextmanager
 
-from tradeloop.lib.broker.paper_book import hydrate
+from tradeloop.lib.broker.orders_schema import load_orders
+from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings
 from tradeloop.scripts.prepare_cycle import prepare as _prepare
@@ -1146,12 +1173,20 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         fills_path = run_dir / "fills.json"
         book_path = root / "state" / "paper_book.jsonl"
         book = hydrate(book_path, settings.paper_starting_inr)
+        pre_fills = len(book.fills)  # replayed history; anything past this is new
         try:
             routed = route_orders_file(orders_path, fills_path, book, settings, root=root)
         except Exception as exc:  # malformed orders.json -> loud abort, no routing
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
             print("tradeloop_cycle=ORDERS_INVALID")
             return 1
+        # Persist this cycle's FILLED fills — the whole point of the book.
+        # Without this append, positions would not survive to the next cycle.
+        new_fills = [f for f in book.fills[pre_fills:] if f.status == "FILLED"]
+        if new_fills:
+            stops = {o.ticker.strip().upper(): float(o.hard_stop)
+                     for o in load_orders(orders_path).orders if o.hard_stop is not None}
+            append_book(book_path, new_fills, hard_stops=stops)
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
         print(f"tradeloop_cycle=OK mode={mode} orders={len(routed)} filled={filled} rejected={rejected}")
@@ -1269,9 +1304,10 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
         return run_dir
 
     def fake_reason(run_dir, mode, agent, timeout):
-        # One approved BUY (in universe, sized under caps) + one non-universe reject.
+        # One approved BUY (in universe, >= min_position_size 15000, under the
+        # 25% allocation cap of the 100000 starting equity) + one non-universe reject.
         (run_dir / "orders.json").write_text(json.dumps({"orders": [
-            {"ticker": "RELIANCE", "side": "BUY", "quantity": 10, "price": 1000},
+            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0},
             {"ticker": "FAKECO", "side": "BUY", "quantity": 1, "price": 5000},
         ]}), encoding="utf-8")
         return 0
@@ -1288,6 +1324,15 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     assert "RISK_REJECTED" in statuses     # non-universe order gated
     decisions = (run_dir / "decisions.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(decisions) == 2             # gate logged its own verdict per order
+
+    # Persistence: the FILLED fill (and its hard_stop) reached the book, so the
+    # NEXT cycle's hydrate sees the position — spec acceptance #3.
+    book_lines = (root / "state" / "paper_book.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(book_lines) == 1
+    rec = json.loads(book_lines[0])
+    assert rec["symbol"] == "RELIANCE" and rec["status"] == "FILLED" and rec["hard_stop"] == 950.0
+    rehydrated = orchestrator.hydrate(root / "state" / "paper_book.jsonl", 100000)
+    assert rehydrated.positions == {"RELIANCE": 20}
 ```
 2. Run it — expect FAIL first if any wiring is off; otherwise PASS. Run the targeted case:
 ```
