@@ -57,6 +57,60 @@ def test_canonical_is_deterministic_regardless_of_key_order():
     assert L.canonical(a) == L.canonical(b)
 
 
+def test_verify_chain_passes_on_untouched_ledger(tmp_path):
+    led = _ledger(tmp_path)
+    led.append({"type": "a", "v": 1})
+    led.append({"type": "b", "v": 2})
+    led.verify_chain()  # must not raise
+
+
+def test_mutating_a_row_breaks_the_chain(tmp_path):
+    led = _ledger(tmp_path)
+    led.append({"type": "a", "v": 1})
+    led.append({"type": "b", "v": 2})
+    led.append({"type": "c", "v": 3})
+    # tamper: rewrite row 2's payload directly, bypassing append
+    import sqlite3
+    conn = sqlite3.connect(str(led.db_path))
+    tampered = L.canonical({"type": "b", "v": 999, "ts": "2026-07-02T00:00:00+00:00"})
+    conn.execute("UPDATE events SET payload_json = ? WHERE seq = 2", (tampered,))
+    conn.commit()
+    conn.close()
+    with pytest.raises(L.LedgerTamperError):
+        led.verify_chain()
+
+
+def test_deleting_a_row_breaks_the_chain(tmp_path):
+    led = _ledger(tmp_path)
+    led.append({"type": "a"})
+    led.append({"type": "b"})
+    led.append({"type": "c"})
+    import sqlite3
+    conn = sqlite3.connect(str(led.db_path))
+    conn.execute("DELETE FROM events WHERE seq = 2")
+    conn.commit()
+    conn.close()
+    with pytest.raises(L.LedgerTamperError):
+        led.verify_chain()
+
+
+def test_mutating_the_genesis_linked_row_is_caught(tmp_path):
+    # row 1 (seq=1) links to GENESIS_HASH, not a prior row's hash. Its own
+    # verification path (recomputed row_hash) differs from a middle row's
+    # (which also checks prev_hash linkage), so it needs its own test.
+    led = _ledger(tmp_path)
+    led.append({"type": "a", "v": 1})
+    led.append({"type": "b", "v": 2})
+    import sqlite3
+    conn = sqlite3.connect(str(led.db_path))
+    tampered = L.canonical({"type": "a", "v": 999, "ts": "2026-07-02T00:00:00+00:00"})
+    conn.execute("UPDATE events SET payload_json = ? WHERE seq = 1", (tampered,))
+    conn.commit()
+    conn.close()
+    with pytest.raises(L.LedgerTamperError):
+        led.verify_chain()
+
+
 def test_nested_payload_roundtrips_through_append_and_replay(tmp_path):
     led = _ledger(tmp_path)
     payload = {

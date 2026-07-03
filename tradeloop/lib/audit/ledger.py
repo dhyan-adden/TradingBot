@@ -24,6 +24,10 @@ def row_hash(prev_hash: str, seq: int, event: dict) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+class LedgerTamperError(Exception):
+    pass
+
+
 class Ledger:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -89,3 +93,22 @@ class Ledger:
             payload["row_hash"] = row["row_hash"]
             result.append(payload)
         return result
+
+    def verify_chain(self) -> None:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT seq, type, payload_json, prev_hash, row_hash FROM events ORDER BY seq ASC"
+            ).fetchall()
+        expected_prev = GENESIS_HASH
+        expected_seq = 1
+        for row in rows:
+            if row["seq"] != expected_seq:
+                raise LedgerTamperError(f"seq gap: expected {expected_seq}, got {row['seq']}")
+            if row["prev_hash"] != expected_prev:
+                raise LedgerTamperError(f"broken link at seq {row['seq']}")
+            event = json.loads(row["payload_json"])
+            recomputed = row_hash(row["prev_hash"], row["seq"], event)
+            if recomputed != row["row_hash"]:
+                raise LedgerTamperError(f"row hash mismatch at seq {row['seq']}")
+            expected_prev = row["row_hash"]
+            expected_seq += 1
