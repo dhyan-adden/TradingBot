@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready
+from tradeloop.lib.config import load_settings
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.util.holidays import is_nse_holiday
 
@@ -29,7 +30,8 @@ def verify(mode: str, check_live_readiness: bool = False) -> int:
         print("tradeloop_setup=HALTED reason=kill_switch")
         return 0
     if check_live_readiness or live_enabled():
-        if not live_promotion_ready(ROOT):
+        settings = load_settings(ROOT / "config" / "settings.yaml")
+        if not live_promotion_ready(ROOT, settings):
             print("tradeloop_setup=LIVE_NOT_READY")
             return 2
     print(f"tradeloop_setup=OK mode={mode}")

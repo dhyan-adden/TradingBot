@@ -1012,7 +1012,7 @@ git commit -am "P0: orchestrator gates + _run_reasoning subprocess seam"
 
 ### Task 10: Orchestrator control flow — gates, lock, timeout, order path, `main`
 
-**Files:** modify `tradeloop/orchestrator.py`; test `tradeloop/tests/test_orchestrator.py`.
+**Files:** modify `tradeloop/orchestrator.py`, `tradeloop/scripts/run_cycle.sh` (run-dir alignment), `tradeloop/scripts/prepare_cycle.py` (optional `root` param); test `tradeloop/tests/test_orchestrator.py`.
 
 **Interfaces:**
 - Consumes: `load_settings`, `Settings` (Task 4); `hydrate` (Task 6); `route_orders_file` (Task 7); `live_enabled`, `live_promotion_ready` (router); `prepare` from `tradeloop.scripts.prepare_cycle`; `_run_reasoning`, `_gate_holiday`, `_gate_kill_switch` (Task 9).
@@ -1025,6 +1025,20 @@ git commit -am "P0: orchestrator gates + _run_reasoning subprocess seam"
 **Decisions:**
 - **Global lock:** a single lockfile `root/state/orchestrator.lock` acquired with `fcntl.flock(LOCK_EX | LOCK_NB)`; on contention → `LOCKED`, exit 0 (cron-safe). `// ponytail: global flock across all modes since the book is shared state; per-mode locks only if throughput ever matters.`
 - **Timeout:** `_run_reasoning` is run under `subprocess`'s own timeout via `settings.cycle_timeout_seconds`; on `TimeoutExpired` → release lock, `TIMEOUT`, exit 1. Implemented by threading the timeout into `_run_reasoning` (add a `timeout` param there).
+- **Run-dir alignment (2026-07-03):** `run_cycle.sh` re-runs `prepare_cycle.py` internally, recomputing the run dir from the wall clock — on a minute boundary the agent would write `orders.json` into a different dir than the orchestrator routes from (silent no-op cycle). Fix: `_run_reasoning` also exports `TRADELOOP_RUN_DIR=str(run_dir)`; `run_cycle.sh` uses it when set and skips its own prepare block. (P1 deletes the seam entirely.) The `run_cycle.sh` edit wraps the existing prepare block:
+```bash
+if [[ -n "${TRADELOOP_RUN_DIR:-}" ]]; then
+  RUN_DIR="$TRADELOOP_RUN_DIR"
+elif [[ "$CYCLE" == "adhoc" ]]; then
+  PREPARE_OUTPUT="$("$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/prepare_cycle.py" --mode "$CYCLE" --request "$REQUEST_TEXT")"
+  echo "$PREPARE_OUTPUT"
+  RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
+else
+  PREPARE_OUTPUT="$("$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/prepare_cycle.py" --mode "$CYCLE")"
+  echo "$PREPARE_OUTPUT"
+  RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
+fi
+```
 - **Order path only runs when reasoning returns 0.**
 - **Malformed orders.json** → `route_orders_file` raises → catch → write `{"error": "ORDERS_INVALID"}` marker to `fills.json`, exit 1. Never route empty fills.
 
@@ -1084,6 +1098,27 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
     rc = orchestrator.run_cycle("premarket", root=root)
     assert rc == 1
+
+
+def test_run_reasoning_pins_run_dir_env(monkeypatch, tmp_path) -> None:
+    # run_cycle.sh must be told which run dir to use, or it re-prepares its own
+    # (minute-boundary divergence -> silent no-op cycle).
+    captured = {}
+
+    def fake_run(argv, env=None, cwd=None, timeout=None):
+        captured["argv"] = argv
+        captured["env"] = env
+
+        class Proc:
+            returncode = 0
+
+        return Proc()
+
+    monkeypatch.setattr(orchestrator.subprocess, "run", fake_run)
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex", timeout=5)
+    assert rc == 0
+    assert captured["env"]["TRADELOOP_RUN_DIR"] == str(tmp_path)
+    assert captured["argv"][2] == "premarket"
 ```
 2. Run it — expect FAIL:
 ```
@@ -1110,7 +1145,7 @@ def _today() -> date:
 
 def _run_reasoning(run_dir: Path, mode: str, agent: str, timeout: int) -> int:
     script = ROOT / "scripts" / "run_cycle.sh"
-    env = dict(os.environ, TRADELOOP_AGENT=agent)
+    env = dict(os.environ, TRADELOOP_AGENT=agent, TRADELOOP_RUN_DIR=str(run_dir))
     try:
         proc = subprocess.run(["bash", str(script), mode], env=env,
                               cwd=str(ROOT.parent), timeout=timeout)

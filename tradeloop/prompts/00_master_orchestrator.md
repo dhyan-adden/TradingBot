@@ -59,7 +59,10 @@ Required stage order:
 5. Run Bull and Bear independently, then Debate Moderator when a trade decision
    is requested.
 6. Run Trader, Risk Manager, Portfolio Manager for full trade requests.
-7. Broker routing reads only `orders.json`; write `fills.json`.
+7. Stop after writing `orders.json`. Do not route orders. Do not write fills.json.
+   Broker routing is a separate deterministic Python step (`tradeloop.orchestrator`)
+   that reads only `orders.json`, runs the risk gate on every order, and writes
+   `fills.json` + `decisions.jsonl`.
 8. Postclose runs Post-Trade Analyst and updates memory.
 
 Each agent writes exactly its named output file before the next agent begins.
