@@ -38,9 +38,9 @@ def _run_dir(tmp_path):
     return d
 
 
-def test_reasoning_runs_dag_and_python_writes_orders_json(tmp_path):
+def test_openrouter_backend_runs_dag_and_python_writes_orders_json(tmp_path):
     d = _run_dir(tmp_path)
-    rc = orchestrator._run_reasoning(d, "premarket", "codex", 1200, client=StageFakeClient())
+    rc = orchestrator._run_reasoning(d, "premarket", "openrouter", 1200, client=StageFakeClient())
     assert rc == 0
     orders = json.loads((d / "orders.json").read_text())
     assert orders["mode"] == "premarket"
@@ -49,3 +49,33 @@ def test_reasoning_runs_dag_and_python_writes_orders_json(tmp_path):
     assert orders["orders"][0]["side"] == "BUY"
     # PM stage artifact was validated and written
     assert (d / "41_pm_decision.json").exists()
+
+
+def test_claude_backend_dispatches_to_subagent_subprocess(tmp_path, monkeypatch):
+    # The default backend must reason via the Claude Code subagent subprocess
+    # (run_cycle.sh claude path), NOT the in-process OpenRouter DAG.
+    captured = {}
+
+    def fake_run(argv, env=None, cwd=None, timeout=None):
+        captured["argv"] = argv
+        captured["env"] = env
+
+        class Proc:
+            returncode = 0
+
+        return Proc()
+
+    monkeypatch.setattr(orchestrator.subprocess, "run", fake_run)
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "claude", 5)
+    assert rc == 0
+    assert captured["argv"][2] == "premarket"
+    assert captured["env"]["TRADELOOP_AGENT"] == "claude"        # subscription path
+    assert captured["env"]["TRADELOOP_RUN_DIR"] == str(tmp_path)  # pinned run dir
+    # in-process DAG must NOT have run under the claude backend
+    assert not (tmp_path / "orders.json").exists()
+
+
+def test_unknown_backend_raises(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        orchestrator._run_reasoning(tmp_path, "premarket", "codex", 5)

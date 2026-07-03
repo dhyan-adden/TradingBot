@@ -2,6 +2,7 @@
 import fcntl
 import json
 import os
+import subprocess
 import sys
 import time
 from contextlib import contextmanager
@@ -34,21 +35,49 @@ def _today() -> date:
     return date.today()
 
 
-def _run_reasoning(run_dir: Path, mode: str, agent: str, timeout: int, client=None) -> int:
-    """P1: run the 13-role DAG in-process (was: exec external codex/claude CLI).
+def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int, client=None) -> int:
+    """Dispatch reasoning to the selected backend, then return an int exit code
+    matching P0's contract: -1 on cycle-timeout (run_cycle -> TIMEOUT, exit 1),
+    0 on success, nonzero on failure.
 
-    Signature preserves P0's positional (run_dir, mode, agent, timeout): run_cycle
-    still calls _run_reasoning(run_dir, mode, agent, settings.cycle_timeout_seconds)
-    unchanged. `agent` is now unused (no external CLI) but kept for compat.
+    Both backends write a schema-valid orders.json into run_dir; run_cycle then
+    validates + gates it identically (evaluate() on every order), so the risk
+    controls are backend-independent.
 
-    Each stage returns a validated pydantic form written to run_dir/<stage>.json.
-    Python - not the LLM - then serialises orders.json from the validated
-    PMDecision, preserving the P0 order-path contract (route_orders_file reads
-    the OrdersFile object shape and runs evaluate() on every order).
-
-    Returns an int exit code matching P0's contract: -1 on cycle-timeout
-    (run_cycle -> TIMEOUT, exit 1), 0 on success.
+    - "claude"     -> Claude Code subagents on your subscription: an Opus master
+                      orchestrator dispatches the 13 stages as Haiku/Sonnet/Opus
+                      subagents. Opus oversight, no OpenRouter. Default.
+    - "openrouter" -> the in-process OpenRouter DAG (the P1 engine), for headless
+                      or autonomous runs outside a Claude Code session.
     """
+    backend = (backend or "claude").lower()
+    if backend == "claude":
+        return _run_reasoning_claude(run_dir, mode, timeout)
+    if backend == "openrouter":
+        return _run_reasoning_openrouter(run_dir, mode, timeout, client)
+    raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
+
+
+def _run_reasoning_claude(run_dir: Path, mode: str, timeout: int) -> int:
+    """Reason via the Claude Code subagent backend (your subscription). The Opus
+    master orchestrator (run_cycle.sh claude path) dispatches each team as a
+    Claude Code subagent, writing artifacts + orders.json into the pinned
+    run_dir. No OpenRouter. -1 on timeout, else the child exit code."""
+    script = ROOT / "scripts" / "run_cycle.sh"
+    env = dict(os.environ, TRADELOOP_AGENT="claude", TRADELOOP_RUN_DIR=str(run_dir))
+    try:
+        proc = subprocess.run(["bash", str(script), mode], env=env,
+                              cwd=str(ROOT.parent), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return -1
+    return proc.returncode
+
+
+def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int, client=None) -> int:
+    """In-process OpenRouter DAG: each stage returns a validated pydantic form
+    written to run_dir/<stage>.json; Python - not the LLM - then serialises
+    orders.json from the validated PMDecision (route_orders_file reads the
+    OrdersFile shape and runs evaluate() on every order)."""
     client = client or LLMClient(audit_path=run_dir / "llm_calls.jsonl")
     deadline = time.monotonic() + timeout  # bound the DAG exactly as P0's subprocess timeout= did
 
@@ -99,9 +128,9 @@ def _global_lock(root: Path):
 
 
 def run_cycle(mode: str, request: str = "", root: Path = ROOT,
-              agent: str | None = None) -> int:
+              backend: str | None = None) -> int:
     settings = load_settings(root / "config" / "settings.yaml")
-    agent = agent or os.getenv("TRADELOOP_AGENT", "codex")
+    backend = backend or os.getenv("TRADELOOP_BACKEND", "claude")
 
     reason = _gate_holiday(_today())
     if reason:
@@ -120,7 +149,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             print("tradeloop_cycle=LOCKED")
             return 0
         run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
-        rc = _run_reasoning(run_dir, mode, agent, settings.cycle_timeout_seconds)
+        rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds)
         if rc == -1:
             print("tradeloop_cycle=TIMEOUT")
             return 1
@@ -162,8 +191,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="tradeloop.orchestrator")
     parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc"])
     parser.add_argument("--request", default="")
+    parser.add_argument("--backend", choices=["claude", "openrouter"], default=None,
+                        help="reasoning backend; falls back to TRADELOOP_BACKEND env, then claude")
     args = parser.parse_args(argv)
-    return run_cycle(args.mode, args.request)
+    return run_cycle(args.mode, args.request, backend=args.backend)
 
 
 if __name__ == "__main__":
