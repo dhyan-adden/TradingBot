@@ -115,6 +115,23 @@ class Ledger:
             expected_prev = row["row_hash"]
             expected_seq += 1
 
+    def log_fetch_ok(self, source: str, count: int, url: str | None = None) -> str:
+        return self.append({"type": FETCH_OK, "source": source, "count": count, "url": url})
+
+    def log_fetch_fail(self, source: str, error: str, url: str | None = None) -> str:
+        return self.append({"type": FETCH_FAIL, "source": source, "error": error, "url": url})
+
+    def log_model_call(self, role: str, model: str, prompt_tokens: int,
+                       completion_tokens: int, latency_ms: int) -> str:
+        return self.append({
+            "type": MODEL_CALL,
+            "role": role,
+            "model": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "latency_ms": latency_ms,
+        })
+
     def project_positions(self, starting_cash_inr: float = 0.0) -> PaperBroker:
         broker = PaperBroker(cash_inr=starting_cash_inr)
         for event in self.replay([ORDER_FILLED]):

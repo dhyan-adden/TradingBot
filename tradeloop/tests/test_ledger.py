@@ -176,3 +176,19 @@ def test_nested_payload_roundtrips_through_append_and_replay(tmp_path):
         "ts": rows[0]["ts"],
     }
     assert L.row_hash(L.GENESIS_HASH, 1, reordered) == h
+
+
+def test_fetch_and_model_loggers(tmp_path):
+    led = _ledger(tmp_path)
+    led.log_fetch_ok("google_news", count=7, url="https://news.example/rss")
+    led.log_fetch_fail("nse_bse", error="HTTP 503")
+    led.log_model_call("bull", "anthropic/claude", prompt_tokens=800,
+                        completion_tokens=200, latency_ms=1420)
+    rows = led.replay()
+    assert [r["type"] for r in rows] == [L.FETCH_OK, L.FETCH_FAIL, L.MODEL_CALL]
+    assert rows[0]["count"] == 7 and rows[0]["source"] == "google_news"
+    assert rows[1]["error"] == "HTTP 503"
+    assert rows[2]["prompt_tokens"] == 800 and rows[2]["latency_ms"] == 1420
+    # no secret-like keys leaked into the model-call event
+    assert not any(k.lower().endswith(("key", "secret", "token")) for k in rows[2])
+    led.verify_chain()
