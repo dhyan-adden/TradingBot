@@ -137,7 +137,7 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     # nothing filled, book untouched, until route_cycle approves it.
     run_dir = root / "runs" / "e2e_premarket"
     assert not (run_dir / "fills.json").exists()
-    assert not (root / "state" / "paper_book.jsonl").exists()
+    assert not (root / "state" / "ledger.db").exists()
 
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 0
@@ -150,7 +150,7 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
 
     # Persistence: the FILLED fill (and its hard_stop) reached the ledger, so the
     # NEXT cycle's hydrate sees the position — spec acceptance #3.
-    book_path = root / "state" / "paper_book.jsonl"
+    book_path = root / "state" / "ledger.db"
     rehydrated = orchestrator.hydrate(book_path, 100000)
     assert rehydrated.positions == {"RELIANCE": 20}
     fill_events = Ledger(book_path).replay(["paper.order.filled"])

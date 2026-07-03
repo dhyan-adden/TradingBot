@@ -200,7 +200,7 @@ def test_cli_route_guards_e2e(tmp_path):
 def test_sell_exit_routes_and_updates_book(monkeypatch, tmp_path):
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
-    book_path = root / "state" / "paper_book.jsonl"
+    book_path = root / "state" / "ledger.db"
     paper_book.append(
         book_path,
         [Fill("SEED", "RELIANCE", "BUY", 20, 1000.0, "FILLED", "CNC")],
