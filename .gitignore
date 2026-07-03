@@ -7,3 +7,5 @@ state/**/*.db
 state/**/*.db-*
 .env
 .DS_Store
+.superpowers/
+*.egg-info/
