@@ -6,6 +6,107 @@
 
 **Tech Stack:** Python 3.11, `httpx` (hardened HTTP, already a dep), `feedparser` (new dep — RSS with ETag/If-Modified-Since), `pydantic` v2 (already a dep), `pandas` (already a dep, scanner frames), stdlib `subprocess`+`json` for the Kite MCP stdio client, `pytest` with recorded fixtures only. Kite candles via a new `zerodha_historical` tool added to `src/mcp/zerodha.ts` (TypeScript / Zod).
 
+---
+
+## VERIFICATION (2026-07-04, post-P2 + post-option-D re-verify)
+
+This plan was written 2026-07-02, before the propose/approve split (option D) and the P2 audit ledger merged. Re-verified against `main` @ `af4f3c0`. **This block OVERRIDES the task bodies below wherever they conflict.** Build against the corrections here.
+
+**Confirmed still valid (no change):**
+- The reasoning DAG really consumes the raw files: `stages.py:30` `"10_news": ["01_news_raw.md", "00_context.md"]`, `stages.py:33` `"13_technical": [..., "02_setups_raw.md", ...]`. Wiring real data into these files feeds the models. The seam `prepare_cycle.py:44-45` (`render_news_raw(NewsExtraction())` / `render_setups([])`) still exists — Task 13 target is live.
+- `schemas.py:16` already defines `EvidenceMixin` (`evidence: list[str]  # news_ids, checked in P3`) on every recommendation-bearing model; prompts already instruct news_id citation. So the Task 12 validator has a real field to check and real teeth once wired (see V4).
+- `zerodha.ts` helpers `requireCredentials`/`textJson`/`buildUrl`/`kiteRequest`/`registerTool` present; `zerodha_ltp`→`/quote/ltp`, `zerodha_ohlc`→`/quote/ohlc` both take `{instruments}`; `const transport = new StdioServerTransport()` present (Task 8 inserts before it). `kiteRequest` does `JSON.parse(text)` — so Task 8 is right to use a raw `fetch` for the CSV `/instruments/:exchange` endpoint. `npm run -s mcp:zerodha` → `tsx src/mcp/zerodha.ts` exists (Task 9 default command).
+- `universe.yaml`: RELIANCE sector=Energy isin=INE002A01018 ✓; `amap["INFOSYS"]` resolves to INFY via the **name** index (INFY name is "Infosys"), not an alias — Task 3 test passes as written. `feedparser` NOT installed (Task 1 pip step genuinely needed). `scan_universe`/`scan_symbol` have zero external callers; no existing scanner test — Task 10 is safe.
+
+**V1 — Task 1 dependency block drops `pandas`.** The block as written omits `pandas>=2.0`, which the scanner imports. Corrected `dependencies` (add feedparser, KEEP pandas):
+```toml
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "PyYAML>=6.0",
+  "pandas>=2.0",
+  "yfinance>=0.2.40",
+  "feedparser>=6.0.11",
+  "langgraph>=0.2.0"
+]
+```
+The `[tool.setuptools.packages.find]` block already reads `where=["src","."]`, `include=["tradingbot*","tradeloop*"]` — **no change**, that half of Task 1 is a no-op. Also create an empty `tradeloop/tests/data/__init__.py` (the new test dir is a package; existing `tradeloop/tests/__init__.py` sets the pattern). Fixtures go under `tradeloop/tests/data/fixtures/` (a NEW dir — the existing `fixtures/` lives at `tradeloop/tests/fixtures/`, do not reuse it).
+
+**V2 — Task 11 `ingest.run` makes `symbols` optional.** So `prepare` need not pre-resolve the universe (see V3). Corrected signature + guard:
+```python
+def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 30,
+        run_dir: Path = None, *, http=None, kite_client=None,
+        master: "TickerMaster | None" = None, config_dir: Path = Path("tradeloop/config")) -> Snapshot:
+    assert run_dir is not None, "ingest.run requires run_dir"
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if master is None:
+        master = load_master(config_dir / "universe.yaml")
+    if symbols is None:
+        symbols = master.symbols()
+    ...
+```
+Existing Task 11 tests still pass `symbols` positionally — unaffected.
+
+**V3 — Task 13 must use the `root` param, pass `config_dir`, and not crash on symbols.** The current `prepare(mode, request="", root=None)` already sets `base = root or ROOT`; the orchestrator calls `_prepare(mode, request, root=root)` and the `--root` CLI depends on it. Task 13's body uses module-global `ROOT` and a manual `load_master(ROOT/config/universe.yaml)` outside the try — that reads the wrong config under an isolated root and FileNotFound-crashes when universe.yaml is absent. Corrected replacement for `prepare_cycle.py:42-45`:
+```python
+    # Real research ingest behind the renderers: fetch news + (later) Kite setups,
+    # tag, freeze the hashed snapshot, render 01_news_raw / 02_setups_raw.
+    # base-relative config so --root / isolated deployments read the right universe.
+    try:
+        ingest_run(now, run_dir=run_dir, config_dir=base / "config")
+    except Exception as exc:  # degrade-not-abort: never leave a silent blank
+        (run_dir / "01_news_raw.md").write_text(
+            render_news_raw([], [], news_available=False), encoding="utf-8")
+        (run_dir / "02_setups_raw.md").write_text(render_setups([]), encoding="utf-8")
+        (run_dir / "ingest_error.txt").write_text(f"ingest failed: {exc}\n", encoding="utf-8")
+```
+Imports: `from tradeloop.lib.data.ingest import run as ingest_run` and `from tradeloop.lib.data.snapshot import render_news_raw, render_setups`; drop the `news_to_tickers` / `scanner.render_setups` imports and unused `import yaml`.
+
+`prepare` passes **no `kite_client`** → ingest's `if kite_client is not None:` guard leaves `setups=[]`, so `02_setups_raw.md` renders empty in production for now. This is deliberate: the Kite scan path (Tasks 9-10) is built and fixture-tested but left **inactive** in the default cycle until Kite auth is confirmed in a live smoke run — activating live candles is promotion-gated, out of P3's hermetic scope. `# ponytail: news is live; Kite scan wired but dormant until a live smoke verifies auth — flip on by passing kite_client=KiteClient() here.` NEWS is live in production; tests stay offline via V3-hermeticity below.
+
+**V3-hermeticity — Task 13 must keep `test_adhoc_mode.py` offline.** `test_adhoc_mode.py:43,56` call the real `prepare_cycle.prepare("adhoc", ...)`; once prepare calls `ingest_run`, those become live-network tests (Google/RSS/Reddit). Both tests only assert run-dir scaffolding, not news. Fix in Task 13's step: monkeypatch `prepare_cycle.ingest_run` to a no-op that writes the two artifacts, in both `test_adhoc_mode` cases (add an autouse fixture or explicit `monkeypatch.setattr`). No live I/O in the suite — non-negotiable.
+
+**V4 — NEW Task 15: wire the evidence validator (Task 12 is dead code otherwise).** Nothing in Tasks 1-14 calls `validate_evidence`, so DoD #3's "evidence checked against snapshot" is unmet. Wire it into the **propose** phase (`run_cycle`), the cheap fail-fast point before a human/Opus reviews:
+
+- Add to `snapshot.py`:
+```python
+def load_snapshot(run_dir: Path):
+    """Rehydrate a frozen snapshot's news_ids for the post-reason evidence check.
+    Returns None when this run has no frozen snapshot (e.g. a monkeypatched prepare),
+    so legacy/unit cycles skip the check instead of failing."""
+    items = Path(run_dir) / "snapshot" / "items.jsonl"
+    if not items.exists():
+        return None
+    news_ids = set()
+    for line in items.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("kind") in ("story", "macro") and rec.get("news_id"):
+            news_ids.add(rec["news_id"])
+    hash_file = Path(run_dir) / "snapshot" / "snapshot_hash.txt"
+    snap_hash = hash_file.read_text().strip() if hash_file.exists() else ""
+    return Snapshot(run_dir=Path(run_dir), snapshot_hash=snap_hash, news_ids=news_ids)
+```
+- In `orchestrator.run_cycle`, AFTER the `load_orders(...)` validation and BEFORE printing `AWAITING_APPROVAL`:
+```python
+        snap = load_snapshot(run_dir)
+        if snap is not None:
+            ev = validate_evidence(run_dir, snap)
+            if not ev.ok:
+                print(f"tradeloop_cycle=EVIDENCE_INVALID missing={len(ev.missing)} run_dir={run_dir}")
+                return 1
+```
+with top-level imports `from tradeloop.lib.data.snapshot import load_snapshot` and `from tradeloop.lib.data.evidence import validate_evidence`. **Block, don't warn:** a cycle whose reasoning cites a news_id absent from its own frozen snapshot is fabricated evidence and must not become approvable (DoD #3/#4). No snapshot on disk → skip (keeps the monkeypatched `_prepare` orchestrator tests green). `route_cycle` does NOT re-check — evidence is immutable after reasoning, checked once at propose.
+- Test `tradeloop/tests/data/test_evidence_wiring.py` (real, e2e through `run_cycle`): build a real frozen snapshot via `freeze([...one story with known news_id...], [], [], run_dir)`; monkeypatch `_prepare` to return that run_dir and `_run_reasoning` to write a valid `orders.json` plus (a) a `20_bull.json` citing the KNOWN id → assert `AWAITING_APPROVAL`, then (b) one citing a PHANTOM id → assert rc==1 and `EVIDENCE_INVALID`. Update `meta`/commit: `git commit -m "P3: wire evidence validator into propose (block cycles citing phantom news_id)"`.
+
+**V5 — dead code (note, don't delete).** After Task 10, `tradeloop/lib/data/nse_quotes.py` (`fetch_ohlcv`) has no callers. Per surgical rules leave it; flag as a follow-up removal. Task 14's deletions stand as written (et_markets_rss / moneycontrol_rss / corp_announcements / reddit_sentiment); do NOT add nse_quotes to that list.
+
+**Build order:** Tasks 1-14 as corrected above, then Task 15. Full suite (`python -m pytest tradeloop/tests -q` under `-W error`) green at the end. Report per-task pass/fail as coverage-of-plan (which guard/edge each test kills), not a bare count.
+
+---
+
 ## Global Constraints
 
 - India cash equities only — no other exchanges/segments; symbols resolve through `config/universe.yaml` / `ticker_master`.
