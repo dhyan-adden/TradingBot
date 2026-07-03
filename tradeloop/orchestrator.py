@@ -130,8 +130,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="tradeloop.orchestrator")
     parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc"])
     parser.add_argument("--request", default="")
+    parser.add_argument("--agent", choices=["codex", "claude"], default=None,
+                        help="reasoning backend; falls back to TRADELOOP_AGENT env, then codex")
     args = parser.parse_args(argv)
-    return run_cycle(args.mode, args.request)
+    return run_cycle(args.mode, args.request, agent=args.agent)
 
 
 if __name__ == "__main__":
