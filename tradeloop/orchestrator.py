@@ -14,6 +14,8 @@ from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings
+from tradeloop.lib.data.evidence import validate_evidence
+from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.client import LLMClient
 from tradeloop.lib.llm.schemas import PMDecision
@@ -172,6 +174,14 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         except Exception:
             print("tradeloop_cycle=ORDERS_INVALID")
             return 1
+
+        snap = load_snapshot(run_dir)
+        if snap is not None:
+            ev = validate_evidence(run_dir, snap)
+            if not ev.ok:
+                print(f"tradeloop_cycle=EVIDENCE_INVALID missing={len(ev.missing)} run_dir={run_dir}")
+                return 1
+
         print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
         return 0
 
