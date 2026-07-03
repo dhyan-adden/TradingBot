@@ -41,6 +41,7 @@ def test_pm_prompt_writes_orders_only_not_fills() -> None:
 
 
 from tradeloop import orchestrator
+from tradeloop.lib.audit.ledger import Ledger
 
 
 def test_run_reasoning_is_a_seam(monkeypatch, tmp_path) -> None:
@@ -147,20 +148,20 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     decisions = (run_dir / "decisions.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(decisions) == 2             # gate logged its own verdict per order
 
-    # Persistence: the FILLED fill (and its hard_stop) reached the book, so the
+    # Persistence: the FILLED fill (and its hard_stop) reached the ledger, so the
     # NEXT cycle's hydrate sees the position — spec acceptance #3.
-    book_lines = (root / "state" / "paper_book.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    assert len(book_lines) == 1
-    rec = json.loads(book_lines[0])
-    assert rec["symbol"] == "RELIANCE" and rec["status"] == "FILLED" and rec["hard_stop"] == 950.0
-    rehydrated = orchestrator.hydrate(root / "state" / "paper_book.jsonl", 100000)
+    book_path = root / "state" / "paper_book.jsonl"
+    rehydrated = orchestrator.hydrate(book_path, 100000)
     assert rehydrated.positions == {"RELIANCE": 20}
+    fill_events = Ledger(book_path).replay(["paper.order.filled"])
+    assert len(fill_events) == 1
+    assert fill_events[0]["symbol"] == "RELIANCE" and fill_events[0]["quantity"] == 20
 
     # Approving the same run twice must refuse - double-routing doubles positions.
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 1
-    book_lines = (root / "state" / "paper_book.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    assert len(book_lines) == 1  # unchanged
+    fill_events = Ledger(book_path).replay(["paper.order.filled"])
+    assert len(fill_events) == 1  # unchanged
 
 
 def test_route_respects_kill_switch(monkeypatch, tmp_path) -> None:
