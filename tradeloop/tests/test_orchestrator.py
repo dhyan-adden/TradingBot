@@ -20,3 +20,20 @@ def test_nse_2026_holiday_gate() -> None:
     assert is_nse_holiday(date(2026, 7, 1)) is False   # ordinary Wednesday
     assert is_nse_holiday(date(2026, 7, 4)) is True    # Saturday — weekend gate
     assert len(NSE_HOLIDAYS_2026) == 16
+
+
+from pathlib import Path
+
+PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
+
+
+def test_master_prompt_hands_routing_to_python() -> None:
+    text = (PROMPTS / "00_master_orchestrator.md").read_text(encoding="utf-8").lower()
+    assert "do not route orders" in text
+    assert "does not write fills.json" in text or "do not write fills.json" in text
+
+
+def test_pm_prompt_writes_orders_only_not_fills() -> None:
+    text = (PROMPTS / "41_portfolio_manager.md").read_text(encoding="utf-8").lower()
+    assert "orders.json" in text
+    assert "do not write" in text and "fills.json" in text
