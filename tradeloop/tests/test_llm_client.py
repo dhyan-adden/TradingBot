@@ -66,3 +66,28 @@ def test_missing_api_key_raises(tmp_path, monkeypatch):
     c = LLMClient(audit_path=tmp_path / "llm_calls.jsonl")
     with pytest.raises(client_mod.LLMConfigError):
         c.call_json("14_shortlist", "s", "u", Shortlist)
+
+
+def test_downgrades_response_format_on_400(tmp_path, monkeypatch):
+    # A provider that 400s on response_format must not fail the cycle: the client
+    # drops response_format and retries on prompt + extraction alone.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-secret")
+    payloads = []
+    statuses = [400, 200]
+    calls = {"n": 0}
+    ok = _load("or_ok_shortlist.json")
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        payloads.append(dict(json))  # snapshot: payload is mutated in place on downgrade
+        status = statuses[min(calls["n"], len(statuses) - 1)]
+        calls["n"] += 1
+        body = ok if status == 200 else {"error": {"message": "response_format unsupported"}}
+        return httpx.Response(status, json=body, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(client_mod.httpx, "post", fake_post)
+    c = LLMClient(audit_path=tmp_path / "llm_calls.jsonl", max_retries=3, backoff_base=0.0)
+    out = c.call_json("14_shortlist", "s", "u", Shortlist)
+    assert isinstance(out, Shortlist)
+    assert calls["n"] == 2                          # 400, then success
+    assert "response_format" in payloads[0]         # first attempt nudged
+    assert "response_format" not in payloads[1]     # retry downgraded after the 400

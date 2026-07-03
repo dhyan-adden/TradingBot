@@ -77,14 +77,11 @@ class LLMClient:
         payload = {
             "model": model,
             "max_tokens": self.max_tokens,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": schema.__name__,
-                    "strict": True,
-                    "schema": schema.model_json_schema(),
-                },
-            },
+            # Best-effort structured-output nudge only. Correctness is guaranteed
+            # by our own brace-balanced extraction + pydantic validation below, so
+            # this stays broadly-supported (json_object, not strict json_schema
+            # which some providers 400 on) and is dropped on a 400 downgrade.
+            "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
@@ -117,6 +114,13 @@ class LLMClient:
                 validated = schema.model_validate(obj)
             except (httpx.HTTPError, ValueError, ValidationError) as exc:
                 last_exc = exc
+                # Graceful downgrade: some providers reject response_format with a
+                # 400. Drop it so the next attempt relies on the prompt + our
+                # extraction instead of hard-failing the whole cycle.
+                if (isinstance(exc, httpx.HTTPStatusError)
+                        and exc.response.status_code == 400
+                        and "response_format" in payload):
+                    payload.pop("response_format", None)
                 self._record(_failed_record(role, model, prompt, str(exc)))
                 if attempt < self.max_retries - 1:
                     time.sleep(self.backoff_base * (2 ** attempt))
