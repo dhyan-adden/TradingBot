@@ -1,7 +1,7 @@
 # TradingBot
 
 Agentic paper trading harness for the Indian market, plus a project-local
-Zerodha Kite MCP setup for Codex.
+Zerodha Kite MCP setup.
 
 ## Setup
 
