@@ -50,3 +50,23 @@ def test_cost_model_defaults_match_settings_costs() -> None:
                 "stt_sell_cnc_pct", "stt_sell_mis_pct", "stamp_buy_cnc_pct",
                 "stamp_buy_mis_pct", "gst_pct", "dp_charge_inr_per_scrip"]:
         assert params[key].default == costs[key], key
+
+
+from tradeloop.lib.broker.router import live_promotion_ready
+
+
+def test_promotion_gate_reads_thresholds_from_settings(tmp_path) -> None:
+    root = tmp_path / "tradeloop"
+    (root / "memory").mkdir(parents=True)
+    (root / "memory" / "strategy_performance.md").write_text(
+        "paper_trades: 5\nwin_rate: 0.9\nexpectancy_r: 1.0\nmax_drawdown_pct: 1\n",
+        encoding="utf-8",
+    )
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    # 5 paper trades < 40 required by settings -> not ready.
+    assert live_promotion_ready(root, settings) is False
+
+    class LooseSettings:
+        promotion_gates = {"min_paper_trades": 1, "min_win_rate": 0.1,
+                           "min_expectancy_r": 0.1, "max_drawdown_pct": 50}
+    assert live_promotion_ready(root, LooseSettings()) is True
