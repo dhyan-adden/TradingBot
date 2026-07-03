@@ -18,3 +18,14 @@ tier_C:
   - reddit_indianstreetbets
   - reddit_indiainvestments
   - stocktwits_india
+
+feeds:
+  moneycontrol_news: https://www.moneycontrol.com/rss/latestnews.xml
+  economic_times_markets: https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms
+  mint_markets: https://www.livemint.com/rss/markets
+  business_standard_markets: https://www.business-standard.com/rss/markets-106.rss
+tiers:
+  moneycontrol_news: tier_B
+  economic_times_markets: tier_A
+  mint_markets: tier_A
+  business_standard_markets: tier_A
