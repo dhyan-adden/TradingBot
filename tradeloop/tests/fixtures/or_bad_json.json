@@ -1,0 +1,12 @@
+{
+  "id": "gen-bad999",
+  "model": "anthropic/claude-sonnet-4.5",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": {"role": "assistant", "content": "sorry I cannot help with that"}
+    }
+  ],
+  "usage": {"prompt_tokens": 50, "completion_tokens": 5, "total_tokens": 55}
+}

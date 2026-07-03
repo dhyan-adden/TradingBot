@@ -109,53 +109,6 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
     assert rc == 1
 
 
-def test_run_reasoning_pins_run_dir_env(monkeypatch, tmp_path) -> None:
-    # run_cycle.sh must be told which run dir to use, or it re-prepares its own
-    # (minute-boundary divergence -> silent no-op cycle).
-    captured = {}
-
-    def fake_run(argv, env=None, cwd=None, timeout=None):
-        captured["argv"] = argv
-        captured["env"] = env
-
-        class Proc:
-            returncode = 0
-
-        return Proc()
-
-    monkeypatch.setattr(orchestrator.subprocess, "run", fake_run)
-    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex", timeout=5)
-    assert rc == 0
-    assert captured["env"]["TRADELOOP_RUN_DIR"] == str(tmp_path)
-    assert captured["argv"][2] == "premarket"
-
-
-def test_run_reasoning_passes_agent_to_backend(monkeypatch, tmp_path) -> None:
-    # Agent-agnostic: whichever backend is chosen must reach run_cycle.sh's
-    # TRADELOOP_AGENT switch. A non-default value proves it is not hardcoded.
-    captured = {}
-
-    def fake_run(argv, env=None, cwd=None, timeout=None):
-        captured["env"] = env
-
-        class Proc:
-            returncode = 0
-
-        return Proc()
-
-    monkeypatch.setattr(orchestrator.subprocess, "run", fake_run)
-    orchestrator._run_reasoning(tmp_path, "premarket", "claude", timeout=5)
-    assert captured["env"]["TRADELOOP_AGENT"] == "claude"
-
-
-def test_cli_agent_flag_selects_backend(monkeypatch) -> None:
-    seen = {}
-    monkeypatch.setattr(orchestrator, "run_cycle",
-                        lambda mode, request, agent=None: seen.update(agent=agent) or 0)
-    orchestrator.main(["premarket", "--agent", "claude"])
-    assert seen["agent"] == "claude"
-
-
 def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))

@@ -2,6 +2,10 @@
 
 **Goal:** Python calls the models directly (OpenRouter), each of the 13 analyst stages fills in a validated pydantic form with an evidence trailer, and every call records model_version/response_id/prompt/response/token-usage — replacing the P0 orchestrator's `_run_reasoning()` external-CLI body with in-process per-stage calls.
 
+> **2026-07-03 verification patch (before execution):**
+> - Model slugs live-verified against `https://openrouter.ai/api/v1/models` (340 models). `anthropic/claude-haiku-4.5`, `claude-sonnet-4.5`, `claude-opus-4.5` all present and kept. `deepseek/deepseek-3.2` did **not** exist — corrected throughout to `deepseek/deepseek-v3.2` (the real stable slug). Newer tiers (`opus-4.8`, `sonnet-5`, `deepseek-v4-pro`) exist and are available if a future upgrade is wanted; the reviewed 4.5 tier stands for now.
+> - Task 5 replaces `_run_reasoning`'s body, so it no longer spawns the `run_cycle.sh` subprocess. Three now-obsolete tests that assert that subprocess behavior must be **removed** as part of Task 5: `test_run_reasoning_pins_run_dir_env`, `test_run_reasoning_passes_agent_to_backend`, and the `--agent` CLI flag + `test_cli_agent_flag_selects_backend` (the flag becomes a no-op once reasoning is in-process; drop the flag from `main()` and revert it to `mode + --request`). `run_cycle.sh` stays on disk as legacy. Net suite after P1 must be green.
+
 **Architecture:** A new `tradeloop/lib/llm/` package: `client.py` (OpenRouter POST with retry/backoff + full-provenance audit, reusing the proven transport in `src/tradingbot/llm.py`), `routing.py` (stage→real-model-ID table), `schemas.py` (pydantic output model per stage, each carrying `evidence: list[str]`), and `stages.py` (load the existing markdown prompt as the system prompt + named inputs from the run dir, call the model, validate against the schema with retry-on-invalid, write the stage artifact). The orchestrator's reasoning seam runs the 13-role DAG in-process; the deterministic P0 order path (`route_orders_file` → `evaluate()`) is untouched — Python still owns `orders.json` serialization and gating.
 
 **Tech Stack:** Python 3.11, httpx (already a dep), pydantic v2 (already a dep), pytest with recorded fixtures (no live network in tests). OpenRouter chat-completions wire API (`response_format: {type: json_schema}` where honored; brace-balanced JSON extraction as the universal fallback).
@@ -46,7 +50,7 @@
 - Produces: `STAGE_MODELS: dict[str, str]`; `model_for(stage: str) -> str`; `DEFAULT_MODEL: str`.
 
 Real OpenRouter slugs (confirmed via OpenRouter docs, 2026-07-02): tier intent haiku=classify, sonnet=analysis, opus=decisions →
-`anthropic/claude-haiku-4.5`, `anthropic/claude-sonnet-4.5`, `anthropic/claude-opus-4.5`, plus `deepseek/deepseek-3.2` for the two news/technical analysis stages (kept as a cheaper analysis tier, matching the old deepseek assignment intent). Stage keys are the artifact base names used everywhere else in the tree (`10_news`, `30_trade_plan`, …).
+`anthropic/claude-haiku-4.5`, `anthropic/claude-sonnet-4.5`, `anthropic/claude-opus-4.5`, plus `deepseek/deepseek-v3.2` for the two news/technical analysis stages (kept as a cheaper analysis tier, matching the old deepseek assignment intent). Stage keys are the artifact base names used everywhere else in the tree (`10_news`, `30_trade_plan`, …).
 
 **Steps**
 
@@ -111,7 +115,7 @@ from __future__ import annotations
 HAIKU = "anthropic/claude-haiku-4.5"     # light classification / sentiment
 SONNET = "anthropic/claude-sonnet-4.5"   # analysis / research
 OPUS = "anthropic/claude-opus-4.5"       # debate / trade / risk / PM decisions
-DEEPSEEK = "deepseek/deepseek-3.2"       # cheaper analysis tier (news/technical)
+DEEPSEEK = "deepseek/deepseek-v3.2"       # cheaper analysis tier (news/technical)
 
 DEFAULT_MODEL = SONNET
 
@@ -1234,10 +1238,10 @@ opus=high-stakes decisions.
 | Stage | Team | Model |
 | --- | --- | --- |
 | `05_adhoc_intake` | Ad Hoc Intake | `anthropic/claude-haiku-4.5` |
-| `10_news` | News Analyst | `deepseek/deepseek-3.2` |
+| `10_news` | News Analyst | `deepseek/deepseek-v3.2` |
 | `11_sentiment` | Sentiment Analyst | `anthropic/claude-haiku-4.5` |
 | `12_fundamentals` | Fundamentals Analyst | `anthropic/claude-sonnet-4.5` |
-| `13_technical` | Technical Analyst | `deepseek/deepseek-3.2` |
+| `13_technical` | Technical Analyst | `deepseek/deepseek-v3.2` |
 | `14_shortlist` | Shortlister | `anthropic/claude-sonnet-4.5` |
 | `20_bull` | Bull Researcher | `anthropic/claude-sonnet-4.5` |
 | `21_bear` | Bear Researcher | `anthropic/claude-sonnet-4.5` |
@@ -1282,7 +1286,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - *Python calls the model directly (no external CLI):* Task 5 replaces `_run_reasoning`'s exec body with in-process `stages.run_stage` over `stages.DAG`.
 - *Reuses the proven `src/tradingbot/llm.py` pattern:* Task 3 carries over `_extract_output_text`, `_parse_json_object`, `_first_json_object` (brace-balanced dedupe) and the JSON-only system prompt verbatim, adding retry/backoff.
 - *Records model_version/response_id/prompt/response/token-usage per call:* Task 3 `CallRecord` captures `body["model"]`, `body["id"]`, prompt, response text, and `usage.{prompt,completion,total}_tokens`, appended to `llm_calls.jsonl` — the input-reproducibility half of DoD #3, tested in `test_llm_client.py`.
-- *`routing.py` with real IDs:* Task 1 replaces the fake `minimax/mimo/hy3/deepseek-v4-flash` IDs with confirmed-current `anthropic/claude-{haiku,sonnet,opus}-4.5` + `deepseek/deepseek-3.2`; Task 6 syncs the doc and guards against regression.
+- *`routing.py` with real IDs:* Task 1 replaces the fake `minimax/mimo/hy3/deepseek-v4-flash` IDs with confirmed-current `anthropic/claude-{haiku,sonnet,opus}-4.5` + `deepseek/deepseek-v3.2`; Task 6 syncs the doc and guards against regression.
 - *`schemas.py` per-stage pydantic with evidence trailer:* Task 2 — shortlist candidate, unified Trade Ticket (reconciling `30_trader.md` + `output_schemas.md`), debate `{conviction,verdict}`, risk decision, PM/orders; `EvidenceMixin.evidence: list[str]` on every recommendation-bearing model (validated against snapshot in P3).
 - *`stages.run_stage(name, run_dir)` loads prompt + inputs, validates, retries on invalid, writes artifact:* Task 4 (client injected for testability; the §6 two-arg call is the default-client path in Task 5).
 - *13-role DAG + tiers preserved:* `stages.DAG` + `routing.STAGE_MODELS` keep the `00_master_orchestrator.md` order and haiku/sonnet/opus intent.
