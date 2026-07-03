@@ -2,8 +2,8 @@
 import fcntl
 import json
 import os
-import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
@@ -12,6 +12,9 @@ from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings
+from tradeloop.lib.llm import stages
+from tradeloop.lib.llm.client import LLMClient
+from tradeloop.lib.llm.schemas import PMDecision
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.util.holidays import is_nse_holiday
 from tradeloop.scripts.prepare_cycle import prepare as _prepare
@@ -31,19 +34,48 @@ def _today() -> date:
     return date.today()
 
 
-def _run_reasoning(run_dir: Path, mode: str, agent: str, timeout: int) -> int:
-    """Phase-0 seam: run the unchanged external reasoning backend as a
-    subprocess. Phase 1 replaces this body with in-process OpenRouter calls
-    without touching the order path. Sources no secrets in Python — the child
-    reads OPENROUTER_API_KEY from the already-exported env (AGENTS.md safe)."""
-    script = ROOT / "scripts" / "run_cycle.sh"
-    env = dict(os.environ, TRADELOOP_AGENT=agent, TRADELOOP_RUN_DIR=str(run_dir))
-    try:
-        proc = subprocess.run(["bash", str(script), mode], env=env,
-                              cwd=str(ROOT.parent), timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return -1
-    return proc.returncode
+def _run_reasoning(run_dir: Path, mode: str, agent: str, timeout: int, client=None) -> int:
+    """P1: run the 13-role DAG in-process (was: exec external codex/claude CLI).
+
+    Signature preserves P0's positional (run_dir, mode, agent, timeout): run_cycle
+    still calls _run_reasoning(run_dir, mode, agent, settings.cycle_timeout_seconds)
+    unchanged. `agent` is now unused (no external CLI) but kept for compat.
+
+    Each stage returns a validated pydantic form written to run_dir/<stage>.json.
+    Python - not the LLM - then serialises orders.json from the validated
+    PMDecision, preserving the P0 order-path contract (route_orders_file reads
+    the OrdersFile object shape and runs evaluate() on every order).
+
+    Returns an int exit code matching P0's contract: -1 on cycle-timeout
+    (run_cycle -> TIMEOUT, exit 1), 0 on success.
+    """
+    client = client or LLMClient(audit_path=run_dir / "llm_calls.jsonl")
+    deadline = time.monotonic() + timeout  # bound the DAG exactly as P0's subprocess timeout= did
+
+    dag = list(stages.DAG)
+    if mode == "adhoc" and (run_dir / "user_request.md").exists():
+        if time.monotonic() > deadline:
+            return -1
+        intake = stages.run_stage("05_adhoc_intake", run_dir, client)
+        wanted = {s.removesuffix(".md") for s in intake.required_stages}
+        if wanted:
+            dag = [s for s in dag if s in wanted]
+
+    for name in dag:
+        if time.monotonic() > deadline:
+            return -1
+        stages.run_stage(name, run_dir, client)
+
+    pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
+    orders_file = {
+        "mode": mode,
+        "live_orders_enabled": False,      # paper default; live only past promotion gate
+        "generated_by": "tradeloop.reasoning.p1",
+        "orders": [o.model_dump() for o in pm.orders],
+        "held": [o.model_dump() for o in pm.held],
+    }
+    (run_dir / "orders.json").write_text(json.dumps(orders_file, indent=2), encoding="utf-8")
+    return 0
 
 
 @contextmanager
@@ -130,10 +162,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="tradeloop.orchestrator")
     parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc"])
     parser.add_argument("--request", default="")
-    parser.add_argument("--agent", choices=["codex", "claude"], default=None,
-                        help="reasoning backend; falls back to TRADELOOP_AGENT env, then codex")
     args = parser.parse_args(argv)
-    return run_cycle(args.mode, args.request, agent=args.agent)
+    return run_cycle(args.mode, args.request)
 
 
 if __name__ == "__main__":
