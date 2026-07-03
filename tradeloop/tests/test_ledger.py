@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from tradeloop.lib.audit import ledger as L
+from tradeloop.lib.broker.paper_broker import PaperBroker
 
 
 def _ledger(tmp_path: Path) -> L.Ledger:
@@ -109,6 +110,50 @@ def test_mutating_the_genesis_linked_row_is_caught(tmp_path):
     conn.close()
     with pytest.raises(L.LedgerTamperError):
         led.verify_chain()
+
+
+def test_project_positions_matches_known_fill_sequence(tmp_path):
+    led = _ledger(tmp_path)
+    # BUY 10 @ 100, BUY 10 @ 120  -> qty 20, avg 110 ; SELL 5 @ 130 -> qty 15
+    for ev in [
+        {"type": L.ORDER_FILLED, "symbol": "TCS", "side": "BUY", "quantity": 10,
+         "fill_price": 100.0, "product": "CNC", "order_id": "P1", "hard_stop": 90.0},
+        {"type": L.ORDER_FILLED, "symbol": "TCS", "side": "BUY", "quantity": 10,
+         "fill_price": 120.0, "product": "CNC", "order_id": "P2", "hard_stop": 95.0},
+        {"type": L.ORDER_FILLED, "symbol": "TCS", "side": "SELL", "quantity": 5,
+         "fill_price": 130.0, "product": "CNC", "order_id": "P3", "hard_stop": 0.0},
+    ]:
+        led.append(ev)
+
+    broker = led.project_positions(starting_cash_inr=1_000_000.0)
+
+    assert isinstance(broker, PaperBroker)
+    assert broker.positions["TCS"] == 15
+    assert broker.avg_prices["TCS"] == pytest.approx(110.0)
+
+
+def test_project_positions_ignores_non_fill_events(tmp_path):
+    led = _ledger(tmp_path)
+    led.append({"type": L.FETCH_OK, "source": "rss"})
+    led.append({"type": L.MODEL_CALL, "role": "news"})
+    led.append({"type": L.ORDER_FILLED, "symbol": "INFY", "side": "BUY", "quantity": 4,
+                "fill_price": 50.0, "product": "CNC", "order_id": "P9", "hard_stop": 45.0})
+    broker = led.project_positions(starting_cash_inr=500_000.0)
+    assert broker.positions == {"INFY": 4}
+
+
+def test_project_positions_full_sell_removes_symbol_from_positions(tmp_path):
+    # BUY then a full SELL of the same symbol must leave it ABSENT from
+    # positions (paper_broker._apply_fill pops a zeroed position), not present
+    # with qty 0 - a qty-0 check would pass even if the pop logic broke.
+    led = _ledger(tmp_path)
+    led.append({"type": L.ORDER_FILLED, "symbol": "TCS", "side": "BUY", "quantity": 10,
+                "fill_price": 100.0, "product": "CNC", "order_id": "P1", "hard_stop": 90.0})
+    led.append({"type": L.ORDER_FILLED, "symbol": "TCS", "side": "SELL", "quantity": 10,
+                "fill_price": 110.0, "product": "CNC", "order_id": "P2", "hard_stop": 0.0})
+    broker = led.project_positions(starting_cash_inr=1_000_000.0)
+    assert "TCS" not in broker.positions
+    assert "TCS" not in broker.avg_prices
 
 
 def test_nested_payload_roundtrips_through_append_and_replay(tmp_path):

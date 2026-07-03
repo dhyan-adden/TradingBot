@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tradeloop.lib.broker.paper_broker import PaperBroker, Fill
+
 GENESIS_HASH = "0" * 64
 
 # event-type constants (single source of truth for producers)
@@ -112,3 +114,19 @@ class Ledger:
                 raise LedgerTamperError(f"row hash mismatch at seq {row['seq']}")
             expected_prev = row["row_hash"]
             expected_seq += 1
+
+    def project_positions(self, starting_cash_inr: float = 0.0) -> PaperBroker:
+        broker = PaperBroker(cash_inr=starting_cash_inr)
+        for event in self.replay([ORDER_FILLED]):
+            fill = Fill(
+                order_id=event["order_id"],
+                symbol=event["symbol"],
+                side=event["side"],
+                quantity=event["quantity"],
+                fill_price=event["fill_price"],
+                status="FILLED",
+                product=event.get("product", "CNC"),
+            )
+            broker._apply_fill(fill)
+            broker.fills.append(fill)
+        return broker
