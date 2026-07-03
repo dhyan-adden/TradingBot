@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
+from tradeloop.lib.audit.ledger import Ledger, RISK_VERDICT
 from tradeloop.lib.broker.orders_schema import load_orders, to_ticket
 from tradeloop.lib.broker.paper_broker import Fill, OrderTicket, PaperBroker
 from tradeloop.lib.broker.zerodha_mcp import to_zerodha_payload
@@ -104,6 +105,7 @@ def route_orders_file(
     book: PaperBroker,
     settings: Settings,
     root: Path = Path("tradeloop"),
+    ledger: "Ledger | None" = None,
 ) -> list[RoutedOrder]:
     of = load_orders(orders_path)  # typed; raises on malformed -> cycle aborts loudly
     records = load_ticker_master(root / "config" / "universe.yaml")
@@ -123,5 +125,15 @@ def route_orders_file(
             outcome = route_order(ticket, book, root=root)
         routed.append(outcome)
         append_decision(decisions_path, order, verdict, outcome)
+        if ledger is not None:
+            ledger.append({
+                "type": RISK_VERDICT,
+                "symbol": ticket.symbol.strip().upper(),
+                "side": ticket.side,
+                "quantity": ticket.quantity,
+                "price": ticket.price,
+                "approved": verdict.approved,
+                "reasons": verdict.reasons,
+            })
     fills_path.write_text(json.dumps([r.__dict__ for r in routed], indent=2, default=str), encoding="utf-8")
     return routed

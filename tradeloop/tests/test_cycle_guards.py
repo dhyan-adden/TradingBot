@@ -19,6 +19,9 @@ from datetime import date
 from pathlib import Path
 
 from tradeloop import orchestrator
+from tradeloop.lib.audit.ledger import Ledger
+from tradeloop.lib.broker import paper_book
+from tradeloop.lib.broker.paper_broker import Fill
 from tradeloop.tests.test_orchestrator import _fresh_root
 from tradeloop.tests.test_reasoning_wiring import StageFakeClient
 from tradeloop.lib.llm import schemas
@@ -197,11 +200,12 @@ def test_cli_route_guards_e2e(tmp_path):
 def test_sell_exit_routes_and_updates_book(monkeypatch, tmp_path):
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
-    book_path = root / "state" / "paper_book.jsonl"
-    book_path.write_text(json.dumps({
-        "symbol": "RELIANCE", "side": "BUY", "quantity": 20,
-        "fill_price": 1000.0, "status": "FILLED", "hard_stop": 950.0,
-    }) + "\n", encoding="utf-8")
+    book_path = root / "state" / "ledger.db"
+    paper_book.append(
+        book_path,
+        [Fill("SEED", "RELIANCE", "BUY", 20, 1000.0, "FILLED", "CNC")],
+        hard_stops={"RELIANCE": 950.0},
+    )
 
     run_dir = root / "runs" / "sell"
     run_dir.mkdir(parents=True)
@@ -213,7 +217,9 @@ def test_sell_exit_routes_and_updates_book(monkeypatch, tmp_path):
     assert rc == 0
     fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
     assert any(f.get("status") == "FILLED" for f in fills)
-    # position fully exited and the exit persisted to the book
-    assert len(book_path.read_text(encoding="utf-8").strip().splitlines()) == 2
+    # position fully exited and the exit persisted to the ledger
     rehydrated = orchestrator.hydrate(book_path, 100000)
     assert rehydrated.positions.get("RELIANCE", 0) == 0
+    sells = Ledger(book_path).replay(["paper.order.filled"])
+    assert any(e["symbol"] == "RELIANCE" and e["side"] == "SELL" for e in sells)
+    Ledger(book_path).verify_chain()

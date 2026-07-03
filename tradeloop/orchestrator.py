@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
+from tradeloop.lib.audit.ledger import Ledger, LedgerTamperError
 from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
@@ -206,11 +207,17 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         if not acquired:
             print("tradeloop_route=LOCKED")
             return 0
-        book_path = root / "state" / "paper_book.jsonl"
+        book_path = root / "state" / "ledger.db"
+        led = Ledger(book_path)
+        try:
+            led.verify_chain()
+        except LedgerTamperError:
+            print("tradeloop_route=LEDGER_TAMPERED")
+            return 1
         book = hydrate(book_path, settings.paper_starting_inr)
         pre_fills = len(book.fills)  # replayed history; anything past this is new
         try:
-            routed = route_orders_file(orders_path, fills_path, book, settings, root=root)
+            routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led)
         except Exception as exc:  # malformed orders.json -> loud abort, no routing
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
             print("tradeloop_route=ORDERS_INVALID")
