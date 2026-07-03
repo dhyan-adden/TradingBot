@@ -40,17 +40,17 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int, client=
     matching P0's contract: -1 on cycle-timeout (run_cycle -> TIMEOUT, exit 1),
     0 on success, nonzero on failure.
 
-    Both backends write a schema-valid orders.json into run_dir; run_cycle then
-    validates + gates it identically (evaluate() on every order), so the risk
-    controls are backend-independent.
+    Both backends write a schema-valid orders.json into run_dir; the separate
+    route phase then validates + gates it identically (evaluate() on every
+    order), so the risk controls are backend-independent.
 
-    - "claude"     -> Claude Code subagents on your subscription: an Opus master
-                      orchestrator dispatches the 13 stages as Haiku/Sonnet/Opus
-                      subagents. Opus oversight, no OpenRouter. Default.
-    - "openrouter" -> the in-process OpenRouter DAG (the P1 engine), for headless
-                      or autonomous runs outside a Claude Code session.
+    - "openrouter" -> the in-process OpenRouter DAG (the P1 engine): cheap,
+                      zero-tool models, full provenance audit. Default - the
+                      "propose" half of the propose/approve split cycle.
+    - "claude"     -> Claude Code subagents on your subscription (Opus master +
+                      Haiku/Sonnet/Opus teams), for adhoc/research runs.
     """
-    backend = (backend or "claude").lower()
+    backend = (backend or "openrouter").lower()
     if backend == "claude":
         return _run_reasoning_claude(run_dir, mode, timeout)
     if backend == "openrouter":
@@ -129,8 +129,11 @@ def _global_lock(root: Path):
 
 def run_cycle(mode: str, request: str = "", root: Path = ROOT,
               backend: str | None = None) -> int:
+    """Propose phase of the split cycle: gates -> reason -> validated orders.json,
+    then STOP. Nothing routes until route_cycle(run_dir) is invoked - that
+    invocation is the approval (a human/overseer reviewed the orders first)."""
     settings = load_settings(root / "config" / "settings.yaml")
-    backend = backend or os.getenv("TRADELOOP_BACKEND", "claude")
+    backend = backend or os.getenv("TRADELOOP_BACKEND", "openrouter")
 
     reason = _gate_holiday(_today())
     if reason:
@@ -157,8 +160,48 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             print(f"tradeloop_cycle=REASONING_FAILED rc={rc}")
             return 1
 
-        orders_path = run_dir / "orders.json"
-        fills_path = run_dir / "fills.json"
+        # Validate now so a bad orders.json fails loudly at propose time, not
+        # at approval time.
+        try:
+            n_orders = len(load_orders(run_dir / "orders.json").orders)
+        except Exception:
+            print("tradeloop_cycle=ORDERS_INVALID")
+            return 1
+        print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
+        return 0
+
+
+def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
+    """Approval phase: review run_dir/orders.json first - invoking this routes it.
+    Re-checks the safety gates (time has passed since propose), sends every order
+    through evaluate() via route_orders_file, and persists fills to the book."""
+    settings = load_settings(root / "config" / "settings.yaml")
+    run_dir = Path(run_dir)
+    orders_path = run_dir / "orders.json"
+    fills_path = run_dir / "fills.json"
+    if not orders_path.exists():
+        print("tradeloop_route=NO_ORDERS_FILE")
+        return 1
+    if fills_path.exists():  # double-routing would double positions
+        print("tradeloop_route=ALREADY_ROUTED")
+        return 1
+
+    reason = _gate_holiday(_today())
+    if reason:
+        print(f"tradeloop_route=SKIP reason={reason}")
+        return 0
+    reason = _gate_kill_switch(root)
+    if reason:
+        print(f"tradeloop_route=HALT reason={reason}")
+        return 0
+    if live_enabled() and not live_promotion_ready(root, settings):
+        print("tradeloop_route=LIVE_NOT_READY")
+        return 2
+
+    with _global_lock(root) as acquired:
+        if not acquired:
+            print("tradeloop_route=LOCKED")
+            return 0
         book_path = root / "state" / "paper_book.jsonl"
         book = hydrate(book_path, settings.paper_starting_inr)
         pre_fills = len(book.fills)  # replayed history; anything past this is new
@@ -166,7 +209,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             routed = route_orders_file(orders_path, fills_path, book, settings, root=root)
         except Exception as exc:  # malformed orders.json -> loud abort, no routing
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
-            print("tradeloop_cycle=ORDERS_INVALID")
+            print("tradeloop_route=ORDERS_INVALID")
             return 1
         # Persist this cycle's FILLED fills — the whole point of the book.
         # Without this append, positions would not survive to the next cycle.
@@ -177,7 +220,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             append_book(book_path, new_fills, hard_stops=stops)
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
-        print(f"tradeloop_cycle=OK mode={mode} orders={len(routed)} filled={filled} rejected={rejected}")
+        print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected}")
         return 0
 
 
@@ -189,11 +232,17 @@ def _prepare_takes_root() -> bool:
 def main(argv=None) -> int:
     import argparse
     parser = argparse.ArgumentParser(prog="tradeloop.orchestrator")
-    parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc"])
+    parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc", "route"])
+    parser.add_argument("run_dir", nargs="?", default=None,
+                        help="run directory to approve+route (route mode only)")
     parser.add_argument("--request", default="")
-    parser.add_argument("--backend", choices=["claude", "openrouter"], default=None,
-                        help="reasoning backend; falls back to TRADELOOP_BACKEND env, then claude")
+    parser.add_argument("--backend", choices=["openrouter", "claude"], default=None,
+                        help="reasoning backend; falls back to TRADELOOP_BACKEND env, then openrouter")
     args = parser.parse_args(argv)
+    if args.mode == "route":
+        if not args.run_dir:
+            parser.error("route requires a run_dir (the proposed cycle to approve)")
+        return route_cycle(Path(args.run_dir))
     return run_cycle(args.mode, args.request, backend=args.backend)
 
 

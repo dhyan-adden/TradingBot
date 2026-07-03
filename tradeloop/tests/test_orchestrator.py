@@ -132,7 +132,14 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     rc = orchestrator.run_cycle("premarket", root=root)
     assert rc == 0
 
+    # Split cycle: propose phase must STOP at orders.json - nothing routed,
+    # nothing filled, book untouched, until route_cycle approves it.
     run_dir = root / "runs" / "e2e_premarket"
+    assert not (run_dir / "fills.json").exists()
+    assert not (root / "state" / "paper_book.jsonl").exists()
+
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
     fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
     statuses = {f.get("status") for f in fills}
     assert "FILLED" in statuses            # approved order routed
@@ -148,3 +155,24 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     assert rec["symbol"] == "RELIANCE" and rec["status"] == "FILLED" and rec["hard_stop"] == 950.0
     rehydrated = orchestrator.hydrate(root / "state" / "paper_book.jsonl", 100000)
     assert rehydrated.positions == {"RELIANCE": 20}
+
+    # Approving the same run twice must refuse - double-routing doubles positions.
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 1
+    book_lines = (root / "state" / "paper_book.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(book_lines) == 1  # unchanged
+
+
+def test_route_respects_kill_switch(monkeypatch, tmp_path) -> None:
+    # Kill switch thrown BETWEEN propose and approve must block routing.
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "ks_premarket"
+    run_dir.mkdir(parents=True)
+    (run_dir / "orders.json").write_text(json.dumps({"orders": [
+        {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000},
+    ]}), encoding="utf-8")
+    (root / "kill_switch.md").write_text("halt", encoding="utf-8")
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
+    assert not (run_dir / "fills.json").exists()  # nothing routed
