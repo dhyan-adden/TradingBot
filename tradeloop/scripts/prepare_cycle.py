@@ -4,15 +4,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tradeloop.lib.data.news_to_tickers import NewsExtraction, render_news_raw
+from tradeloop.lib.data.ingest import run as ingest_run
+from tradeloop.lib.data.snapshot import render_news_raw, render_setups
 from tradeloop.lib.portfolio.state import empty_state_from_settings, render_context
-from tradeloop.lib.ta.scanner import render_setups
 from tradeloop.lib.util.ist_clock import IST
 
 
@@ -39,10 +37,18 @@ def prepare(mode: str, request: str = "", root: Path | None = None) -> Path:
             raise ValueError("adhoc mode requires --request text")
         (run_dir / "user_request.md").write_text(f"# User Request\n\n{request_text}\n", encoding="utf-8")
 
-    # V1 preprocessing is schema-first and non-blocking. Real feed/scanner calls
-    # are safe to add behind these renderers without changing agent contracts.
-    (run_dir / "01_news_raw.md").write_text(render_news_raw(NewsExtraction()), encoding="utf-8")
-    (run_dir / "02_setups_raw.md").write_text(render_setups([]), encoding="utf-8")
+    # Real research ingest behind the renderers: fetch news + (later) Kite setups,
+    # tag, freeze the hashed snapshot, render 01_news_raw / 02_setups_raw.
+    # base-relative config so --root / isolated deployments read the right universe.
+    # ponytail: news is live; Kite scan wired but dormant until a live smoke verifies
+    # auth - flip on by passing kite_client=KiteClient() here.
+    try:
+        ingest_run(now, run_dir=run_dir, config_dir=base / "config")
+    except Exception as exc:  # degrade-not-abort: never leave a silent blank
+        (run_dir / "01_news_raw.md").write_text(
+            render_news_raw([], [], news_available=False), encoding="utf-8")
+        (run_dir / "02_setups_raw.md").write_text(render_setups([]), encoding="utf-8")
+        (run_dir / "ingest_error.txt").write_text(f"ingest failed: {exc}\n", encoding="utf-8")
     artifact_names = [
         "10_news.md",
         "11_sentiment.md",
