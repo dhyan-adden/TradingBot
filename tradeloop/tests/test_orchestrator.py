@@ -1,4 +1,5 @@
 import importlib
+import json
 from datetime import date
 
 from tradeloop.lib.util.holidays import NSE_HOLIDAYS_2026, is_nse_holiday
@@ -127,3 +128,44 @@ def test_run_reasoning_pins_run_dir_env(monkeypatch, tmp_path) -> None:
     assert rc == 0
     assert captured["env"]["TRADELOOP_RUN_DIR"] == str(tmp_path)
     assert captured["argv"][2] == "premarket"
+
+
+def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def fake_prepare(mode, request="", root=None):
+        run_dir = root / "runs" / f"e2e_{mode}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def fake_reason(run_dir, mode, agent, timeout):
+        # One approved BUY (in universe, >= min_position_size 15000, under the
+        # 25% allocation cap of the 100000 starting equity) + one non-universe reject.
+        (run_dir / "orders.json").write_text(json.dumps({"orders": [
+            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0},
+            {"ticker": "FAKECO", "side": "BUY", "quantity": 1, "price": 5000},
+        ]}), encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    rc = orchestrator.run_cycle("premarket", root=root)
+    assert rc == 0
+
+    run_dir = root / "runs" / "e2e_premarket"
+    fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
+    statuses = {f.get("status") for f in fills}
+    assert "FILLED" in statuses            # approved order routed
+    assert "RISK_REJECTED" in statuses     # non-universe order gated
+    decisions = (run_dir / "decisions.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(decisions) == 2             # gate logged its own verdict per order
+
+    # Persistence: the FILLED fill (and its hard_stop) reached the book, so the
+    # NEXT cycle's hydrate sees the position — spec acceptance #3.
+    book_lines = (root / "state" / "paper_book.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(book_lines) == 1
+    rec = json.loads(book_lines[0])
+    assert rec["symbol"] == "RELIANCE" and rec["status"] == "FILLED" and rec["hard_stop"] == 950.0
+    rehydrated = orchestrator.hydrate(root / "state" / "paper_book.jsonl", 100000)
+    assert rehydrated.positions == {"RELIANCE": 20}
