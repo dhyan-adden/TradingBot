@@ -5,11 +5,11 @@ from tradeloop.lib.llm import routing
 DOC = Path("tradeloop/prompts/shared/model_routing.md")
 
 
-def test_doc_has_no_fake_model_ids():
+def test_doc_has_no_retired_model_ids():
     text = DOC.read_text()
-    for fake in ("minimax/minimax-m3", "deepseek/deepseek-v4-flash",
-                 "xiaomi/mimo-v2.5", "tencent/hy3-preview"):
-        assert fake not in text, f"placeholder model {fake} still in doc"
+    for retired in ("anthropic/claude-opus-4.5", "anthropic/claude-sonnet-4.5",
+                    "anthropic/claude-haiku-4.5", "deepseek/deepseek-v3.2"):
+        assert retired not in text, f"retired model {retired} still in doc"
 
 
 def test_doc_lists_every_real_stage_model():

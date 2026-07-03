@@ -49,7 +49,7 @@ class LLMClient:
         audit_path: Path,
         api_key_env: str = "OPENROUTER_API_KEY",
         base_url: str = "https://openrouter.ai/api/v1",
-        default_model: str = "anthropic/claude-sonnet-4.5",
+        default_model: str = "xiaomi/mimo-v2.5",
         max_tokens: int = 4000,
         max_retries: int = 3,
         backoff_base: float = 0.5,
