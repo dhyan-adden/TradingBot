@@ -13,6 +13,7 @@ dependencies = [
   "PyYAML>=6.0",
   "pandas>=2.0",
   "yfinance>=0.2.40",
+  "feedparser>=6.0.11",
   "langgraph>=0.2.0"
 ]
 
