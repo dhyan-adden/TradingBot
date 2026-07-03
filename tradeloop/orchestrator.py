@@ -95,13 +95,17 @@ def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int, client=Non
             return -1
         stages.run_stage(name, run_dir, client)
 
-    pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
+    if "41_pm_decision" in dag:
+        pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
+        orders, held = pm.orders, pm.held
+    else:  # research-only adhoc: no PM stage ran, so there is nothing to route
+        orders, held = [], []
     orders_file = {
         "mode": mode,
         "live_orders_enabled": False,      # paper default; live only past promotion gate
         "generated_by": "tradeloop.reasoning.p1",
-        "orders": [o.model_dump() for o in pm.orders],
-        "held": [o.model_dump() for o in pm.held],
+        "orders": [o.model_dump() for o in orders],
+        "held": [o.model_dump() for o in held],
     }
     (run_dir / "orders.json").write_text(json.dumps(orders_file, indent=2), encoding="utf-8")
     return 0
@@ -238,12 +242,15 @@ def main(argv=None) -> int:
     parser.add_argument("--request", default="")
     parser.add_argument("--backend", choices=["openrouter", "claude"], default=None,
                         help="reasoning backend; falls back to TRADELOOP_BACKEND env, then openrouter")
+    parser.add_argument("--root", default=None,
+                        help="tradeloop root override (isolated e2e tests / alt deployments)")
     args = parser.parse_args(argv)
+    root = Path(args.root) if args.root else ROOT
     if args.mode == "route":
         if not args.run_dir:
             parser.error("route requires a run_dir (the proposed cycle to approve)")
-        return route_cycle(Path(args.run_dir))
-    return run_cycle(args.mode, args.request, backend=args.backend)
+        return route_cycle(Path(args.run_dir), root=root)
+    return run_cycle(args.mode, args.request, root=root, backend=args.backend)
 
 
 if __name__ == "__main__":
