@@ -1,0 +1,15 @@
+{
+  "id": "gen-abc123",
+  "model": "anthropic/claude-sonnet-4.5",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"candidates\":[{\"ticker\":\"RELIANCE\",\"catalyst_type\":\"earnings\",\"source_track\":\"tier_a\",\"composite_score\":7.5,\"thesis\":\"beat\",\"horizon\":\"5-20 days\",\"evidence\":[\"a1b2c3d4e5f6\"]}],\"evidence\":[\"a1b2c3d4e5f6\"]}"
+      }
+    }
+  ],
+  "usage": {"prompt_tokens": 120, "completion_tokens": 60, "total_tokens": 180}
+}
