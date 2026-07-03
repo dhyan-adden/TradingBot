@@ -39,13 +39,17 @@ if [[ "${1:-}" == "--resume-from" ]]; then
 fi
 
 "$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/verify_setup.py" --mode "$CYCLE"
-if [[ "$CYCLE" == "adhoc" ]]; then
+if [[ -n "${TRADELOOP_RUN_DIR:-}" ]]; then
+  RUN_DIR="$TRADELOOP_RUN_DIR"
+elif [[ "$CYCLE" == "adhoc" ]]; then
   PREPARE_OUTPUT="$("$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/prepare_cycle.py" --mode "$CYCLE" --request "$REQUEST_TEXT")"
+  echo "$PREPARE_OUTPUT"
+  RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
 else
   PREPARE_OUTPUT="$("$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/prepare_cycle.py" --mode "$CYCLE")"
+  echo "$PREPARE_OUTPUT"
+  RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
 fi
-echo "$PREPARE_OUTPUT"
-RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
 
 # Make the OpenRouter key available to the Codex model provider. Reads only this
 # one var, internally, and never prints it (same allowance as the Zerodha MCP).

@@ -19,14 +19,15 @@ from tradeloop.lib.util.ist_clock import IST
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(mode: str, request: str = "") -> Path:
+def prepare(mode: str, request: str = "", root: Path | None = None) -> Path:
+    base = root or ROOT
     now = datetime.now(IST)
-    run_dir = ROOT / "runs" / f"{now:%Y-%m-%d_%H%M}_{mode}"
+    run_dir = base / "runs" / f"{now:%Y-%m-%d_%H%M}_{mode}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    state = empty_state_from_settings(ROOT / "config" / "settings.yaml")
-    macro_path = ROOT / "memory" / "macro_view.md"
+    state = empty_state_from_settings(base / "config" / "settings.yaml")
+    macro_path = base / "memory" / "macro_view.md"
     macro = macro_path.read_text(encoding="utf-8") if macro_path.exists() else ""
-    carry_forward_path = ROOT / "memory" / "carry_forward_context.md"
+    carry_forward_path = base / "memory" / "carry_forward_context.md"
     carry_forward = carry_forward_path.read_text(encoding="utf-8") if carry_forward_path.exists() else ""
     context = render_context(state, mode, macro)
     if carry_forward.strip():

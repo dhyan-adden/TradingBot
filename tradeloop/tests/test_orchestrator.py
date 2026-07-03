@@ -54,3 +54,76 @@ def test_run_reasoning_is_a_seam(monkeypatch, tmp_path) -> None:
     rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex")
     assert rc == 0
     assert calls["mode"] == "premarket"
+
+
+def _fresh_root(tmp_path):
+    """Copy the minimal config the orchestrator reads into an isolated root."""
+    import shutil
+    root = tmp_path / "tradeloop"
+    (root / "config").mkdir(parents=True)
+    (root / "state").mkdir()
+    src = Path(__file__).resolve().parents[1]
+    shutil.copy(src / "config" / "settings.yaml", root / "config" / "settings.yaml")
+    shutil.copy(src / "config" / "universe.yaml", root / "config" / "universe.yaml")
+    return root
+
+
+def test_holiday_halts_before_reasoning(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    called = {"reasoned": False}
+    monkeypatch.setattr(orchestrator, "_run_reasoning", lambda *a, **k: called.__setitem__("reasoned", True) or 0)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 1, 26))  # Republic Day
+    rc = orchestrator.run_cycle("premarket", root=root)
+    assert rc == 0
+    assert called["reasoned"] is False
+
+
+def test_kill_switch_halts_before_reasoning(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    (root / "kill_switch.md").write_text("halt", encoding="utf-8")
+    called = {"reasoned": False}
+    monkeypatch.setattr(orchestrator, "_run_reasoning", lambda *a, **k: called.__setitem__("reasoned", True) or 0)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    rc = orchestrator.run_cycle("premarket", root=root)
+    assert rc == 0
+    assert called["reasoned"] is False
+
+
+def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def fake_reason(run_dir, mode, agent, timeout):
+        (run_dir / "orders.json").write_text("{not json", encoding="utf-8")
+        return 0
+
+    def fake_prepare(mode, request="", root=None):
+        run_dir = root / "runs" / f"test_{mode}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    rc = orchestrator.run_cycle("premarket", root=root)
+    assert rc == 1
+
+
+def test_run_reasoning_pins_run_dir_env(monkeypatch, tmp_path) -> None:
+    # run_cycle.sh must be told which run dir to use, or it re-prepares its own
+    # (minute-boundary divergence -> silent no-op cycle).
+    captured = {}
+
+    def fake_run(argv, env=None, cwd=None, timeout=None):
+        captured["argv"] = argv
+        captured["env"] = env
+
+        class Proc:
+            returncode = 0
+
+        return Proc()
+
+    monkeypatch.setattr(orchestrator.subprocess, "run", fake_run)
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex", timeout=5)
+    assert rc == 0
+    assert captured["env"]["TRADELOOP_RUN_DIR"] == str(tmp_path)
+    assert captured["argv"][2] == "premarket"
