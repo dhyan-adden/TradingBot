@@ -37,3 +37,20 @@ def test_pm_prompt_writes_orders_only_not_fills() -> None:
     text = (PROMPTS / "41_portfolio_manager.md").read_text(encoding="utf-8").lower()
     assert "orders.json" in text
     assert "do not write" in text and "fills.json" in text
+
+
+from tradeloop import orchestrator
+
+
+def test_run_reasoning_is_a_seam(monkeypatch, tmp_path) -> None:
+    calls = {}
+
+    def fake(run_dir, mode, agent):
+        calls["run_dir"] = run_dir
+        calls["mode"] = mode
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake)
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex")
+    assert rc == 0
+    assert calls["mode"] == "premarket"
