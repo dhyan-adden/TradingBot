@@ -35,10 +35,18 @@ def test_verify_setup_accepts_adhoc(monkeypatch, tmp_path: Path) -> None:
     assert verify_setup.verify("adhoc") == 0
 
 
+def _stub_ingest_run(as_of, run_dir, config_dir):
+    # V3-hermeticity: prepare() now calls the real (network-hitting) ingest_run;
+    # these tests only assert run-dir scaffolding, so keep them offline.
+    Path(run_dir, "01_news_raw.md").write_text("# Raw News\n", encoding="utf-8")
+    Path(run_dir, "02_setups_raw.md").write_text("# Raw Technical Setups\n", encoding="utf-8")
+
+
 def test_prepare_adhoc_writes_user_request(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "tradeloop"
     write_minimal_root(root)
     monkeypatch.setattr(prepare_cycle, "ROOT", root)
+    monkeypatch.setattr(prepare_cycle, "ingest_run", _stub_ingest_run)
 
     run_dir = prepare_cycle.prepare("adhoc", "Analyze INFY for a long-only swing setup")
 
@@ -51,6 +59,7 @@ def test_prepare_adhoc_requires_request(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "tradeloop"
     write_minimal_root(root)
     monkeypatch.setattr(prepare_cycle, "ROOT", root)
+    monkeypatch.setattr(prepare_cycle, "ingest_run", _stub_ingest_run)
 
     try:
         prepare_cycle.prepare("adhoc", "")

@@ -232,5 +232,67 @@ server.registerTool(
   }
 );
 
+const instrumentTokenCache = new Map<string, number>();
+
+server.registerTool(
+  "zerodha_instrument_token",
+  {
+    title: "Resolve instrument token",
+    description: "Resolve a Kite instrument_token for exchange+tradingsymbol (e.g. NSE + INFY).",
+    inputSchema: {
+      exchange: z.string().min(1),
+      tradingsymbol: z.string().min(1)
+    }
+  },
+  async ({ exchange, tradingsymbol }) => {
+    const key = `${exchange}:${tradingsymbol}`;
+    if (instrumentTokenCache.has(key)) {
+      return textJson({ instrument_token: instrumentTokenCache.get(key) });
+    }
+    const { apiKey, accessToken } = requireCredentials();
+    const resp = await fetch(buildUrl(`/instruments/${encodeURIComponent(exchange)}`), {
+      headers: new Headers({ Authorization: `token ${apiKey}:${accessToken}`, "X-Kite-Version": "3" })
+    });
+    const csv = await resp.text();
+    const rows = csv.split("\n");
+    const header = rows[0].split(",");
+    const tokIdx = header.indexOf("instrument_token");
+    const symIdx = header.indexOf("tradingsymbol");
+    for (const row of rows.slice(1)) {
+      const cols = row.split(",");
+      if (cols[symIdx] === tradingsymbol) {
+        const token = Number(cols[tokIdx]);
+        instrumentTokenCache.set(key, token);
+        return textJson({ instrument_token: token });
+      }
+    }
+    throw new Error(`instrument_token not found for ${key}`);
+  }
+);
+
+server.registerTool(
+  "zerodha_historical",
+  {
+    title: "Get Zerodha historical candles",
+    description:
+      "Fetch historical OHLCV candles for an instrument_token. Dates in 'YYYY-MM-DD HH:MM:SS'. interval one of minute/day/3minute/5minute/10minute/15minute/30minute/60minute.",
+    inputSchema: {
+      instrument_token: z.number().int().positive(),
+      from_date: z.string().min(1),
+      to_date: z.string().min(1),
+      interval: z.enum(["minute", "day", "3minute", "5minute", "10minute", "15minute", "30minute", "60minute"]),
+      continuous: z.boolean().default(false),
+      oi: z.boolean().default(false)
+    }
+  },
+  async ({ instrument_token, from_date, to_date, interval, continuous, oi }) => {
+    const data = await kiteRequest<{ candles: unknown[] }>(
+      `/instruments/historical/${instrument_token}/${interval}`,
+      { query: { from: from_date, to: to_date, continuous: continuous ? 1 : 0, oi: oi ? 1 : 0 } }
+    );
+    return textJson(data);
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

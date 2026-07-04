@@ -49,3 +49,39 @@ def alias_index(records: Iterable[TickerRecord]) -> Dict[str, TickerRecord]:
             index[alias.upper()] = record
     return index
 
+
+class TickerMaster:
+    def __init__(self, records: List[TickerRecord]):
+        self.records = records
+        self._by_symbol = {r.symbol.upper(): r for r in records}
+        self._by_isin = {r.isin.upper(): r for r in records if r.isin}
+
+    def symbols(self) -> List[str]:
+        return [r.symbol for r in self.records]
+
+    def record_for(self, symbol: str) -> "TickerRecord | None":
+        return self._by_symbol.get(symbol.strip().upper())
+
+    def sector_of(self, symbol: str) -> str:
+        rec = self.record_for(symbol)
+        return rec.sector if rec else ""
+
+    def by_isin(self, isin: str) -> "TickerRecord | None":
+        return self._by_isin.get(isin.strip().upper())
+
+    def alias_map(self) -> Dict[str, TickerRecord]:
+        # symbols first (never shadowed), then names, then aliases; first writer wins.
+        index: Dict[str, TickerRecord] = {}
+        for record in self.records:
+            index.setdefault(record.symbol.upper(), record)
+        for record in self.records:
+            index.setdefault(record.name.upper(), record)
+        for record in self.records:
+            for alias in record.aliases:
+                index.setdefault(alias.upper(), record)
+        return index
+
+
+def load_master(path: Path) -> TickerMaster:
+    return TickerMaster(load_ticker_master(path))
+
