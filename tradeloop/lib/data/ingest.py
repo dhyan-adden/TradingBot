@@ -78,9 +78,14 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
                                max_fetch=max_fetch, min_turnover_inr=min_turnover,
                                pace_seconds=pace)
 
-    # full ranked scan to disk (audit + dashboard); only the cleanest N go downstream
+    # full ranked scan to disk (audit + dashboard); only the top N go downstream
     (run_dir / "full_scan.jsonl").write_text(
         "".join(json.dumps(asdict(s)) + "\n" for s in setups), encoding="utf-8")
+    # news/research-first cap: a stock with a real catalyst outranks a merely-clean
+    # chart, so catalysts are never cut before the trader sees them. Chart cleanliness
+    # breaks ties within each group. (Not market cap.)
+    news_tickers = {s.ticker.strip().upper() for s in stories}
+    setups.sort(key=lambda s: (s.ticker.strip().upper() not in news_tickers, -s.cleanliness_score))
     setups = setups[:top_n]
 
     (run_dir / "01_news_raw.md").write_text(
