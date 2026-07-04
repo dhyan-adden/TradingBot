@@ -5,6 +5,8 @@ __pycache__/
 *.pyc
 state/**/*.db
 state/**/*.db-*
+**/state/*.db
+**/state/*.db-*
 .env
 .DS_Store
 .superpowers/
