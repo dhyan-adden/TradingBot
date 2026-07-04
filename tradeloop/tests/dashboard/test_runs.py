@@ -1,0 +1,46 @@
+import json
+from pathlib import Path
+
+from tradeloop.dashboard.runs import list_runs, read_run
+
+
+def _make_run(runs_dir: Path, name: str, with_decision: bool):
+    d = runs_dir / name
+    d.mkdir(parents=True)
+    (d / "10_news.json").write_text(json.dumps(
+        {"names_in_play": [{"ticker": "HDFCBANK", "catalyst": "Q1", "tier": "A"}]}))
+    if with_decision:
+        (d / "41_pm_decision.json").write_text(json.dumps({"orders": [], "held": []}))
+        (d / "orders.json").write_text(json.dumps({"orders": [], "held": []}))
+    return d
+
+
+def test_list_runs_newest_first(tmp_path):
+    _make_run(tmp_path, "2026-07-03_0900_premarket", True)
+    _make_run(tmp_path, "2026-07-04_0900_premarket", True)
+    runs = list_runs(tmp_path)
+    assert [r.dir_name for r in runs][0] == "2026-07-04_0900_premarket"
+    assert runs[0].mode == "premarket"
+
+
+def test_read_run_complete_has_stages_and_decision(tmp_path):
+    d = _make_run(tmp_path, "2026-07-04_0900_premarket", True)
+    out = read_run(d)
+    assert out["live"] is False
+    stages = {s["stage"] for s in out["stages"]}
+    assert "10_news" in stages
+    assert out["decision"]["summary"]
+
+
+def test_read_run_live_when_no_decision(tmp_path):
+    d = _make_run(tmp_path, "2026-07-04_0900_premarket", False)
+    out = read_run(d)
+    assert out["live"] is True
+
+
+def test_read_run_tolerates_missing_and_malformed_files(tmp_path):
+    d = tmp_path / "2026-07-04_0900_premarket"
+    d.mkdir()
+    (d / "10_news.json").write_text("{ this is not json")
+    out = read_run(d)  # must not raise
+    assert isinstance(out["stages"], list)
