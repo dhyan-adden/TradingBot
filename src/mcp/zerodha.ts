@@ -274,6 +274,39 @@ server.registerTool(
 );
 
 server.registerTool(
+  "zerodha_instruments",
+  {
+    title: "List instruments",
+    description: "List all instruments for an exchange, filtered by instrument_type (default EQ). Returns [{tradingsymbol, instrument_token}].",
+    inputSchema: {
+      exchange: z.string().min(1),
+      instrument_type: z.string().default("EQ")
+    }
+  },
+  async ({ exchange, instrument_type }) => {
+    const { apiKey, accessToken } = requireCredentials();
+    const resp = await fetch(buildUrl(`/instruments/${encodeURIComponent(exchange)}`), {
+      headers: new Headers({ Authorization: `token ${apiKey}:${accessToken}`, "X-Kite-Version": "3" })
+    });
+    const csv = await resp.text();
+    const rows = csv.split("\n").filter((r) => r.trim().length > 0);
+    const header = rows[0].split(",");
+    const tokIdx = header.indexOf("instrument_token");
+    const symIdx = header.indexOf("tradingsymbol");
+    const typeIdx = header.indexOf("instrument_type");
+    const out: { tradingsymbol: string; instrument_token: number }[] = [];
+    for (const row of rows.slice(1)) {
+      const cols = row.split(",");
+      if (typeIdx >= 0 && cols[typeIdx] !== instrument_type) continue;
+      const token = Number(cols[tokIdx]);
+      if (!Number.isFinite(token)) continue;
+      out.push({ tradingsymbol: cols[symIdx], instrument_token: token });
+    }
+    return textJson({ instruments: out });
+  }
+);
+
+server.registerTool(
   "zerodha_historical",
   {
     title: "Get Zerodha historical candles",
