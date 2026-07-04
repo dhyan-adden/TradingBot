@@ -1,0 +1,25 @@
+# 10_news
+
+```json
+{
+  "evidence": [
+    "ceb3192284ee",
+    "f1c586dd3dd4",
+    "7c6a81d64e96",
+    "5db7c84c835c",
+    "307f3e1138f3",
+    "db533b105943",
+    "c4f853f69623"
+  ],
+  "macro_context": "Rupee weakens to 95.21/USD on persistent merchant and NDF flows. Weak US jobs data fuels Fed rate cut expectations, boosting bitcoin above $61k and lifting gold/silver. Indian markets lifted by realty and healthcare, but a weak rupee clouds the rally. Key H2CY26 triggers include monsoon progress, crude oil prices, and earnings season. IT stocks rebounded sharply after a four-day slide on dip buying, though Nomura flags anaemic growth for FY27. Banks are in focus ahead of Q1 results, with several brokerages setting targets.",
+  "names_in_play": [],
+  "macro_themes": [
+    "Weak rupee and its impact on foreign flows",
+    "Fed dovish pivot expectations supporting gold and risk assets",
+    "IT sector rebound after heavy selling, but growth outlook remains cautious",
+    "Banking and financials ahead of Q1 earnings season",
+    "Commodity rally in gold and silver",
+    "Macro triggers: monsoon, crude oil, and corporate earnings for H2CY26"
+  ]
+}
+```

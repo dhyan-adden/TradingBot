@@ -1,0 +1,140 @@
+{
+  "evidence": [],
+  "candidates": [
+    {
+      "evidence": [],
+      "ticker": "HCLTECH",
+      "catalyst_type": "sector_rebound",
+      "source_track": "tier_b",
+      "composite_score": 7.5,
+      "thesis": "IT sector rebound after selloff; dip-buying momentum likely to continue in near term.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "INFY",
+      "catalyst_type": "sector_rebound",
+      "source_track": "tier_b",
+      "composite_score": 7.3,
+      "thesis": "IT sector rebound after selloff; large-cap IT likely to see continued technical bounce.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "WIPRO",
+      "catalyst_type": "sector_rebound",
+      "source_track": "tier_b",
+      "composite_score": 7.0,
+      "thesis": "IT sector rebound after selloff; oversold conditions may fuel further short-covering.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "DLF",
+      "catalyst_type": "sector_rotation",
+      "source_track": "tier_b",
+      "composite_score": 7.8,
+      "thesis": "Realty sector outperformance amid sectoral rotation; macro sentiment positive for real estate.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "GODREJPROP",
+      "catalyst_type": "sector_rotation",
+      "source_track": "tier_b",
+      "composite_score": 7.6,
+      "thesis": "Realty sector outperformance amid sectoral rotation; strong domestic demand narrative.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "APOLLOHOSP",
+      "catalyst_type": "sector_rotation",
+      "source_track": "tier_b",
+      "composite_score": 7.7,
+      "thesis": "Healthcare sector lifting indices; defensive rotation favoring pharma and hospitals.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "CIPLA",
+      "catalyst_type": "sector_rotation",
+      "source_track": "tier_b",
+      "composite_score": 7.4,
+      "thesis": "Healthcare sector outperformance; defensive plays likely to see continued flows.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "RECLTD",
+      "catalyst_type": "macro_theme",
+      "source_track": "tier_b",
+      "composite_score": 6.8,
+      "thesis": "Banking sector focus ahead of Q1 results; PSU NBFCs may benefit from dollar debt funding via RBI swap window.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "POWERGRID",
+      "catalyst_type": "quiet_technical",
+      "source_track": "quiet",
+      "composite_score": 6.5,
+      "thesis": "Stable dividend yield and defensive utility play amid rupee weakness; potential quiet accumulation.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "ONGC",
+      "catalyst_type": "commodity_benefit",
+      "source_track": "tier_b",
+      "composite_score": 7.1,
+      "thesis": "Gold/silver rally and commodity cycle may benefit upstream energy; rupee weakness adds tailwind.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "HINDUNILVR",
+      "catalyst_type": "defensive_rotation",
+      "source_track": "tier_b",
+      "composite_score": 6.9,
+      "thesis": "Defensive FMCG likely to see flows amid macro uncertainty and rupee depreciation.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "TCS",
+      "catalyst_type": "sector_rebound",
+      "source_track": "tier_b",
+      "composite_score": 7.2,
+      "thesis": "IT sector rebound; largest IT company likely to see technical bounce after selloff.",
+      "horizon": "1-5 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "ITC",
+      "catalyst_type": "defensive_rotation",
+      "source_track": "tier_c",
+      "composite_score": 6.6,
+      "thesis": "Defensive FMCG with agri exposure; rupee weakness may support export competitiveness.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "SBIN",
+      "catalyst_type": "macro_theme",
+      "source_track": "tier_b",
+      "composite_score": 7.0,
+      "thesis": "Banking sector focus ahead of Q1 results; large PSU bank may benefit from systemic flows.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "TATAMOTORS",
+      "catalyst_type": "quiet_technical",
+      "source_track": "quiet",
+      "composite_score": 6.7,
+      "thesis": "Potential quiet technical setup after recent correction; auto sector may see value buying.",
+      "horizon": "5-20 days"
+    }
+  ]
+}

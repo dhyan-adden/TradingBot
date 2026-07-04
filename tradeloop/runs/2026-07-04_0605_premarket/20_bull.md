@@ -1,0 +1,46 @@
+# 20_bull
+
+```json
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [
+        "Weak US jobs data fuels Fed rate cut expectations, boosting bitcoin above $61k and lifting gold/silver.",
+        "Commodity rally in gold and silver."
+      ],
+      "ticker": "GOLDBEES",
+      "claim": "Fed rate cut expectations from weak US jobs data are boosting gold prices, providing a direct macro tailwind for gold ETFs over the next 1-5 days."
+    },
+    {
+      "evidence": [
+        "Weak US jobs data fuels Fed rate cut expectations, boosting bitcoin above $61k and lifting gold/silver.",
+        "Commodity rally in gold and silver."
+      ],
+      "ticker": "SILVERBEES",
+      "claim": "Silver offers higher beta than gold on the same Fed cut expectations and weak dollar, making it a tactical long for amplified upside in the short term."
+    },
+    {
+      "evidence": [
+        "IT stocks rebounded sharply after a four-day slide on dip buying, though Nomura flags anaemic growth for FY27."
+      ],
+      "ticker": "ITBEES",
+      "claim": "The IT sector is rebounding sharply from a four-day slide on dip buying, suggesting a tactical short-term bounce in a beaten-down sector."
+    },
+    {
+      "evidence": [
+        "Banks are in focus ahead of Q1 results, with several brokerages setting targets."
+      ],
+      "ticker": "NIFTYBANK",
+      "claim": "Banking sector stocks are in focus ahead of Q1 earnings results with multiple brokerages setting targets, creating a near-term positive catalyst."
+    },
+    {
+      "evidence": [
+        "Indian markets lifted by realty and healthcare, but a weak rupee clouds the rally."
+      ],
+      "ticker": "NIFTY REALTY",
+      "claim": "The realty sector is benefiting from a risk-on market tone and potential rate cut hopes, providing a medium-term tailwind for the sector."
+    }
+  ]
+}
+```
