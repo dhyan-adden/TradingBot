@@ -35,7 +35,7 @@ STAGE_INPUTS: dict[str, list[str]] = {
     "20_bull": ["14_shortlist.md"],
     "21_bear": ["14_shortlist.md"],
     "22_debate": ["20_bull.md", "21_bear.md"],
-    "30_trade_plan": ["22_debate.md", "13_technical.md", "00_context.md"],
+    "30_trade_plan": ["22_debate.md", "13_technical.md", "02_setups_raw.md", "00_context.md"],
     "40_risk_report": ["30_trade_plan.md", "00_context.md"],
     "41_pm_decision": ["40_risk_report.md", "30_trade_plan.md"],
     "50_post_trade": ["fills.json"],
