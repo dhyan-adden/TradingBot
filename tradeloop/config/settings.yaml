@@ -35,7 +35,9 @@ universe:
   exclude_segments: [SME, ETF_LEVERAGED]
   pace_seconds: 0.34          # delay between historical calls (~3 req/s Kite limit)
   max_symbols: 2500           # hard ceiling on symbols scanned
-  max_setups_downstream: 25   # cleanest-N setups fed to the AI stages (full scan still saved to disk)
+  max_setups_downstream: 150  # prompt-size ceiling on setups fed to the analysts; set generous so
+                              # the AGGREGATE shortlister (news+mood+health+charts) is the real selector.
+                              # Full scan still saved to disk. Overflow beyond this is blended chart+news.
 
 shortlist:
   target_size: 12

@@ -33,14 +33,14 @@ def test_ingest_caps_downstream_and_dumps_full_scan(tmp_path, monkeypatch):
     assert {d["ticker"] for d in dumped} == {"AAA", "BBB", "CCC"}
 
 
-def test_downstream_cap_prioritises_news_backed_over_cleaner_chart(tmp_path, monkeypatch):
+def test_overflow_cut_blends_news_and_chart_not_news_override(tmp_path, monkeypatch):
     run_dir = tmp_path / "run"
-    # NEWSY has the WORST chart score but a real news catalyst; CLEAN1/CLEAN2 are
-    # cleaner charts with no news. With top_n=2, NEWSY must survive and the cleanest
-    # non-news (CLEAN1) fills the second slot; CLEAN2 is dropped.
-    setups = [_setup("CLEAN1", 9.0), _setup("CLEAN2", 8.0), _setup("NEWSY", 3.0)]
+    # Overflow tiebreak (top_n=2 forces a cut). News is a WEIGHTED factor (+2.0), not an
+    # override: NEWSY (chart 6.0 + news 2.0 = 8.0) beats CLEAN_MID (7.0, no news), but a
+    # weak news chart does NOT beat a much cleaner one - CLEAN_TOP (9.0) still wins.
+    setups = [_setup("CLEAN_TOP", 9.0), _setup("CLEAN_MID", 7.0), _setup("NEWSY", 6.0)]
     monkeypatch.setattr(ingest, "scan_universe", lambda *a, **k: list(setups))
-    monkeypatch.setattr(ingest, "load_universe", lambda *a, **k: ["CLEAN1", "CLEAN2", "NEWSY"])
+    monkeypatch.setattr(ingest, "load_universe", lambda *a, **k: ["CLEAN_TOP", "CLEAN_MID", "NEWSY"])
     monkeypatch.setattr(ingest, "_collect_news", lambda *a, **k: (["x"], []))
     story = TaggedStory(ticker="NEWSY", title="NEWSY beats Q1", url="http://x",
                         source="feed", tier="tier_A", category="earnings",
@@ -51,4 +51,5 @@ def test_downstream_cap_prioritises_news_backed_over_cleaner_chart(tmp_path, mon
                       kite_client=object(), config_dir=Path("tradeloop/config"),
                       max_setups_downstream=2)
 
-    assert {s.ticker for s in snap.setups} == {"NEWSY", "CLEAN1"}
+    # blended scores: CLEAN_TOP 9.0, NEWSY 8.0, CLEAN_MID 7.0 -> top 2 kept
+    assert {s.ticker for s in snap.setups} == {"CLEAN_TOP", "NEWSY"}

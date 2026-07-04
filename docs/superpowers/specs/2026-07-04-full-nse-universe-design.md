@@ -13,7 +13,7 @@ The two lists must be reconciled: the scan must cover the real Indian cash-equit
 
 - **Coverage:** the full NSE cash-equity universe (~1,800 stocks), pulled live from Zerodha.
 - **Liquidity floor:** scan everything but auto-skip stocks below a configurable average daily traded value (default Rs 5 crore/day) - avoids manipulation-prone micro-caps that cannot be safely exited.
-- **Downstream cost cap:** the full ranked scan is saved to disk (audit + dashboard), but only the top N setups (default 25) feed the AI reasoning stages, to bound daily token cost. The cap is **news/research-first**: a stock with a real news catalyst outranks a merely-clean chart (chart cleanliness breaks ties within each group), so catalysts are never cut before the trader sees them. Never market cap.
+- **Aggregate-driven selection with a generous cost ceiling:** the full ranked scan is saved to disk (audit + dashboard). Selection is **aggregate** - the whole tradeable setup pool flows to the analysts, and `14_shortlist` (the aggregate step: news + mood + fundamentals + technicals -> `composite_score`) is the real selector; the expensive per-name stages (bull/bear/debate) run on that shortlist, so they are bounded by it, not by setup count. `max_setups_downstream` (default 150) is only a prompt-size safety ceiling, set generous so it rarely bites; when the scan does exceed it, the overflow is ordered by a blend of chart quality + news catalyst (news is a weighted factor, never an override, never market cap).
 
 ## Architecture
 
@@ -49,7 +49,7 @@ All thresholds are config values, changeable without code edits.
 
 `load_universe(kite)` -> ~1,800 symbols -> `scan_universe` (paced, liquidity-filtered, per-symbol tolerant) -> full ranked setups.
 Full list -> `full_scan.jsonl` (disk).
-Top 25 (news-catalyst setups first, then cleanest charts) -> `02_setups_raw.md` + frozen snapshot -> technical/trader stages -> grounding gate.
+Full tradeable set (up to the 150 prompt-size ceiling; overflow blended chart+news) -> `02_setups_raw.md` + frozen snapshot -> analysts -> `14_shortlist` aggregate `composite_score` selects -> debate/trader stages -> grounding gate.
 
 ## Error handling
 

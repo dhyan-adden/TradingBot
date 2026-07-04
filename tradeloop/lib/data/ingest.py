@@ -21,6 +21,9 @@ from tradeloop.lib.data.universe import load_universe
 from tradeloop.lib.ta.scanner import scan_universe
 
 MACRO_TERMS = {"RBI", "INR", "RUPEE", "OIL", "FED", "FII", "DII", "INFLATION", "GDP"}
+# overflow-only tiebreak weight (added to a 0-10 chart score) when the scan exceeds the
+# prompt-size ceiling; the real selection is the aggregate shortlister, not this.
+NEWS_WEIGHT = 2.0
 _NSE_WARMUP = ("www.nseindia.com", "www.bseindia.com", "nsearchives.nseindia.com")
 
 
@@ -78,14 +81,18 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
                                max_fetch=max_fetch, min_turnover_inr=min_turnover,
                                pace_seconds=pace)
 
-    # full ranked scan to disk (audit + dashboard); only the top N go downstream
+    # full ranked scan to disk (audit + dashboard)
     (run_dir / "full_scan.jsonl").write_text(
         "".join(json.dumps(asdict(s)) + "\n" for s in setups), encoding="utf-8")
-    # news/research-first cap: a stock with a real catalyst outranks a merely-clean
-    # chart, so catalysts are never cut before the trader sees them. Chart cleanliness
-    # breaks ties within each group. (Not market cap.)
+    # Selection is AGGREGATE: the whole tradeable set flows to the analysts, and the
+    # shortlister (14_shortlist) ranks it on EVERYTHING - news + mood + health + charts.
+    # top_n is only a prompt-size safety ceiling, set generous so it rarely bites; when
+    # the scan does exceed it, order the overflow by a blend of chart quality + news
+    # catalyst (news is a weighted factor, never an override, never market cap).
     news_tickers = {s.ticker.strip().upper() for s in stories}
-    setups.sort(key=lambda s: (s.ticker.strip().upper() not in news_tickers, -s.cleanliness_score))
+    setups.sort(
+        key=lambda s: s.cleanliness_score + (NEWS_WEIGHT if s.ticker.strip().upper() in news_tickers else 0.0),
+        reverse=True)
     setups = setups[:top_n]
 
     (run_dir / "01_news_raw.md").write_text(
