@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>TradeLoop</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 780px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 22px; }
+  select, button { font: inherit; padding: 6px 10px; }
+  .card { border: 1px solid #e2e2e2; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+  .card h3 { margin: 0 0 2px; font-size: 17px; }
+  .role { color: #666; font-size: 13px; margin: 0 0 8px; }
+  .summary { font-weight: 600; margin: 0 0 6px; }
+  ul { margin: 6px 0 0; padding-left: 20px; }
+  .decision { border-color: #2b7; background: #f3fbf6; }
+  .waiting { color: #999; font-style: italic; }
+  #bar { display: flex; gap: 10px; align-items: center; }
+</style>
+<h1>TradeLoop - what the bot is thinking</h1>
+<div id="bar">
+  <button id="runNow">Run now</button>
+  <select id="picker"></select>
+  <span id="status"></span>
+</div>
+<div id="cards"></div>
+<script>
+let current = null, timer = null;
+
+async function loadRuns() {
+  const r = await fetch('/api/runs').then(x => x.json());
+  const picker = document.getElementById('picker');
+  picker.innerHTML = '';
+  for (const run of r.runs) {
+    const o = document.createElement('option');
+    o.value = run.dir_name;
+    o.textContent = run.dir_name + '  -  ' + run.decision;
+    picker.appendChild(o);
+  }
+  if (r.runs.length && !current) selectRun(r.runs[0].dir_name);
+}
+
+function selectRun(dir) {
+  current = dir;
+  document.getElementById('picker').value = dir;
+  poll();
+}
+
+async function poll() {
+  if (!current) return;
+  const run = await fetch('/api/run?dir=' + encodeURIComponent(current)).then(x => x.json());
+  render(run);
+  clearTimeout(timer);
+  if (run.live) {
+    document.getElementById('status').textContent = 'live - running...';
+    timer = setTimeout(poll, 1500);
+  } else {
+    document.getElementById('status').textContent = 'complete';
+  }
+}
+
+function card(s, extraClass) {
+  const points = (s.points || []).map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  return '<div class="card ' + (extraClass || '') + '">'
+    + '<h3>' + escapeHtml(s.title) + '</h3>'
+    + '<p class="role">' + escapeHtml(s.role || '') + '</p>'
+    + (s.summary ? '<p class="summary">' + escapeHtml(s.summary) + '</p>' : '')
+    + (points ? '<ul>' + points + '</ul>' : '')
+    + '</div>';
+}
+
+function render(run) {
+  const html = (run.stages || []).map(s => card(s)).join('')
+    + card(run.decision, 'decision');
+  document.getElementById('cards').innerHTML = html;
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+document.getElementById('picker').addEventListener('change', e => selectRun(e.target.value));
+document.getElementById('runNow').addEventListener('click', async () => {
+  document.getElementById('status').textContent = 'starting...';
+  const r = await fetch('/api/run-now', { method: 'POST' }).then(x => x.json()).catch(() => ({}));
+  if (r.dir) { await loadRuns(); selectRun(r.dir); }
+  else document.getElementById('status').textContent = r.error || 'could not start';
+});
+
+loadRuns();
+</script>
