@@ -96,6 +96,18 @@ class KiteClient:
         raw = self.transport.call_tool("zerodha_ohlc", {"instruments": [key]})
         return raw.get(key, {})
 
+    def instruments(self, exchange: str = "NSE", instrument_type: str = "EQ") -> dict:
+        raw = self.transport.call_tool(
+            "zerodha_instruments", {"exchange": exchange, "instrument_type": instrument_type}
+        )
+        out: dict = {}
+        for row in raw.get("instruments", []):
+            sym = str(row["tradingsymbol"]).strip().upper()
+            token = int(row["instrument_token"])
+            out[sym] = token
+            self._token_cache[sym] = token  # seed so historical() needs no lookup
+        return out
+
     def _token(self, symbol: str) -> int:
         sym = symbol.strip().upper()
         if sym not in self._token_cache:
