@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable, List
@@ -35,7 +36,7 @@ def candles_to_frame(candles: List[Candle]) -> pd.DataFrame:
     })
 
 
-def scan_symbol(symbol: str, kite_client, as_of: date) -> "SetupScan | None":
+def scan_symbol(symbol: str, kite_client, as_of: date, min_turnover_inr: float = 0.0) -> "SetupScan | None":
     frm = as_of - timedelta(days=200)
     candles = kite_client.historical(symbol, frm, as_of, "day")
     if len(candles) < 30:
@@ -47,6 +48,11 @@ def scan_symbol(symbol: str, kite_client, as_of: date) -> "SetupScan | None":
     atr_series = enriched["ATR14"].dropna() if "ATR14" in enriched.columns else pd.Series(dtype=float)
     if atr_series.empty:
         return None  # no fabricated stop - a setup without a real ATR is not tradeable
+    # liquidity floor: mean daily traded value must clear the configured threshold
+    if min_turnover_inr > 0 and volumes:
+        turnover = sum(c * v for c, v in zip(closes, volumes)) / len(closes)
+        if turnover < min_turnover_inr:
+            return None
     atr_value = float(atr_series.iloc[-1])
     latest = closes[-1]
     breakout_signal = breakout(closes, 20)
@@ -81,11 +87,15 @@ def scan_symbol(symbol: str, kite_client, as_of: date) -> "SetupScan | None":
 _TOLERATED = (ValueError, RuntimeError)
 
 
-def scan_universe(symbols: Iterable[str], kite_client, as_of: date, max_fetch: int = 30) -> List["SetupScan"]:
+def scan_universe(symbols: Iterable[str], kite_client, as_of: date, max_fetch: int = 2500,
+                  min_turnover_inr: float = 0.0, pace_seconds: float = 0.0,
+                  sleep=time.sleep) -> List["SetupScan"]:
     scans: List[SetupScan] = []
     for symbol in list(symbols)[:max_fetch]:
+        if pace_seconds > 0:
+            sleep(pace_seconds)  # respect Kite ~3 req/s
         try:
-            scan = scan_symbol(symbol, kite_client, as_of)
+            scan = scan_symbol(symbol, kite_client, as_of, min_turnover_inr=min_turnover_inr)
         except _TOLERATED as exc:
             log.warning("scan skipped %s: %s", symbol, exc)
             continue
