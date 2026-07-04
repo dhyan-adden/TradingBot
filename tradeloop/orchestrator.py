@@ -15,6 +15,7 @@ from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings
 from tradeloop.lib.data.evidence import validate_evidence
+from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.client import LLMClient
@@ -170,7 +171,8 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         # Validate now so a bad orders.json fails loudly at propose time, not
         # at approval time.
         try:
-            n_orders = len(load_orders(run_dir / "orders.json").orders)
+            orders = load_orders(run_dir / "orders.json").orders
+            n_orders = len(orders)
         except Exception:
             print("tradeloop_cycle=ORDERS_INVALID")
             return 1
@@ -180,6 +182,16 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             ev = validate_evidence(run_dir, snap)
             if not ev.ok:
                 print(f"tradeloop_cycle=EVIDENCE_INVALID missing={len(ev.missing)} run_dir={run_dir}")
+                return 1
+
+        # Price grounding: entry/hard_stop must match the frozen scanner levels,
+        # not numbers the model invented from a news headline. Skipped when the
+        # scan is dormant (no setups frozen), same policy as the evidence gate.
+        scan_levels = load_scan_levels(run_dir)
+        if scan_levels:
+            gr = validate_grounding(orders, scan_levels)
+            if not gr.ok:
+                print(f"tradeloop_cycle=PRICE_UNGROUNDED violations={len(gr.violations)} run_dir={run_dir}")
                 return 1
 
         print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
