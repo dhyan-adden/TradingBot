@@ -46,6 +46,25 @@ def test_call_json_validates_and_records_provenance(tmp_path, monkeypatch):
     assert rec["used_model"] is True
 
 
+def test_call_json_injects_schema_field_names(tmp_path, monkeypatch):
+    # Regression guard for the hollow-output bug: the model must SEE the schema
+    # field names, else it invents prose keys and pydantic (extra="ignore")
+    # returns an all-defaults empty object that "validates" but carries nothing.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-secret")
+    seen = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen["system"] = json["messages"][0]["content"]
+        return httpx.Response(200, json=_load("or_ok_shortlist.json"),
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(client_mod.httpx, "post", fake_post)
+    c = LLMClient(audit_path=tmp_path / "llm_calls.jsonl", backoff_base=0.0)
+    c.call_json("14_shortlist", "system", "user", Shortlist)
+    for field in ("candidates", "composite_score", "evidence"):
+        assert field in seen["system"], f"schema field {field!r} not shown to model"
+
+
 def test_retries_on_transport_error_then_succeeds(tmp_path, monkeypatch):
     err = httpx.ConnectError("boom")
     c, calls = _client(tmp_path, monkeypatch, [err, _load("or_ok_shortlist.json")])
