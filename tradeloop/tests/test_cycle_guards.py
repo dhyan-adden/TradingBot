@@ -185,11 +185,15 @@ def test_cli_route_guards_e2e(tmp_path):
     assert proc.returncode == 1
     assert "NO_ORDERS_FILE" in proc.stdout
 
-    # pre-existing fills.json -> double-route refused through the real CLI
+    # fills.json holding REAL fills -> double-route refused through the real CLI
+    # (an empty [] placeholder from prepare_cycle must not trip this; see
+    # test_empty_fills_placeholder_does_not_block_route)
     routed = root / "runs" / "cli_routed"
     routed.mkdir(parents=True)
     (routed / "orders.json").write_text(json.dumps({"orders": []}), encoding="utf-8")
-    (routed / "fills.json").write_text("[]", encoding="utf-8")
+    (routed / "fills.json").write_text(
+        json.dumps([{"symbol": "RELIANCE", "quantity": 20, "status": "FILLED"}]),
+        encoding="utf-8")
     proc = cli("route", str(routed), "--root", str(root))
     assert proc.returncode == 1
     assert "ALREADY_ROUTED" in proc.stdout

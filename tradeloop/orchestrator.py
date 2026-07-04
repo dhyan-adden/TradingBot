@@ -31,6 +31,20 @@ def _gate_holiday(today: date) -> str | None:
     return "nse_holiday" if is_nse_holiday(today) else None
 
 
+def _already_routed(fills_path: Path) -> bool:
+    """True only when fills.json holds real routed content. prepare_cycle
+    pre-creates an empty [] placeholder (the postclose 50_post_trade input);
+    that empty file must NOT count as already-routed, or the approve step could
+    never run. A non-empty or unparseable fills file means routing already
+    happened - block the re-route."""
+    if not fills_path.exists():
+        return False
+    try:
+        return bool(json.loads(fills_path.read_text(encoding="utf-8")))
+    except (ValueError, OSError):
+        return True
+
+
 def _gate_kill_switch(root: Path) -> str | None:
     return "kill_switch" if kill_switch_active(root) else None
 
@@ -209,7 +223,7 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
     if not orders_path.exists():
         print("tradeloop_route=NO_ORDERS_FILE")
         return 1
-    if fills_path.exists():  # double-routing would double positions
+    if _already_routed(fills_path):  # double-routing would double positions
         print("tradeloop_route=ALREADY_ROUTED")
         return 1
 

@@ -19,6 +19,30 @@ def _seed_run(root, name="prod"):
     return run_dir
 
 
+def test_empty_fills_placeholder_does_not_block_route(monkeypatch, tmp_path):
+    # prepare_cycle pre-creates an empty fills.json placeholder; it must NOT trip
+    # the double-routing guard, or the approve step can never run on a real cycle.
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = _seed_run(root, name="placeholder")
+    (run_dir / "fills.json").write_text("[]\n", encoding="utf-8")
+
+    assert orchestrator.route_cycle(run_dir, root=root) == 0
+
+
+def test_nonempty_fills_still_blocks_reroute(monkeypatch, tmp_path, capsys):
+    # the guard's real job: once actual fills exist, refuse to route again.
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = _seed_run(root, name="reroute")
+    (run_dir / "fills.json").write_text(
+        json.dumps([{"symbol": "RELIANCE", "quantity": 20, "status": "FILLED"}]),
+        encoding="utf-8")
+
+    assert orchestrator.route_cycle(run_dir, root=root) == 1
+    assert "ALREADY_ROUTED" in capsys.readouterr().out
+
+
 def test_route_cycle_logs_verdict_and_fill_and_verifies_chain(monkeypatch, tmp_path):
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
