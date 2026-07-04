@@ -13,6 +13,19 @@ def test_every_dag_stage_has_a_schema():
         assert "evidence" in model.model_fields, f"{stage} missing evidence trailer"
 
 
+def test_evidence_filters_prose_keeps_only_news_ids():
+    # Live smoke showed models stuff prose rationales into evidence; the P3 gate
+    # must judge real news_id citations, not sentences. The filter keeps 12-hex
+    # ids and drops prose / wrong-length / uppercase. A fabricated-but-well-formed
+    # id is KEPT on purpose so the evidence gate can still catch it downstream.
+    sr = schemas.SentimentReport.model_validate({
+        "scores": [],
+        "evidence": ["a1b2c3d4e5f6", "Banks in focus ahead of Q1 results",
+                     "deadbeefcafe", "A1B2C3D4E5F6", "short", "a1b2c3d4e5f"],
+    })
+    assert sr.evidence == ["a1b2c3d4e5f6", "deadbeefcafe"]
+
+
 def test_shortlist_candidate_valid():
     sl = schemas.Shortlist.model_validate({
         "candidates": [{

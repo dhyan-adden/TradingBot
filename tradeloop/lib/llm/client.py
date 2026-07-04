@@ -74,6 +74,11 @@ class LLMClient:
             raise LLMConfigError(f"{self.api_key_env} not set")
 
         prompt = f"{system}\n\n{user}"
+        # Give the model the exact output shape. Without this it invents prose
+        # keys ("Names in play today") that never match the pydantic fields, so
+        # extra="ignore" silently defaults every field and the object comes back
+        # hollow. The JSON Schema pins field names/types/required + enums.
+        schema_hint = json.dumps(schema.model_json_schema(), separators=(",", ":"))
         payload = {
             "model": model,
             "max_tokens": self.max_tokens,
@@ -88,9 +93,14 @@ class LLMClient:
                     "content": (
                         f"{system}\n\n"
                         "You are one bounded agent inside an Indian-market paper trading "
-                        "system. India cash equities only, long-only. Return one compact "
-                        "JSON object only, matching the given schema. Do not request order "
-                        "execution; risk, gate and broker controls are deterministic and final."
+                        "system. India cash equities only, long-only. Return ONE compact JSON "
+                        "object and nothing else, conforming to this JSON Schema - use these "
+                        "EXACT field names (not prose labels), correct types, and every required "
+                        f"field:\n{schema_hint}\n"
+                        "When a claim rests on a news item, cite it by copying the bracketed "
+                        "[news_id] tokens from the input verbatim into the nearest 'evidence' "
+                        "array. Do not request order execution; risk, gate and broker controls "
+                        "are deterministic and final."
                     ),
                 },
                 {"role": "user", "content": user},

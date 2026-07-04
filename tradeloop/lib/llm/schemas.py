@@ -7,14 +7,29 @@ so Python - not the LLM - serialises orders.json from a validated object.
 """
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+_NEWS_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 
 
 # --- shared trailer -------------------------------------------------------
 class EvidenceMixin(BaseModel):
-    evidence: list[str] = Field(default_factory=list)  # news_ids, checked in P3
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="12-char hex news_id tokens copied verbatim from the input's "
+                    "[news_id] brackets; omit if the claim rests on no news item.",
+    )
+
+    @field_validator("evidence")
+    @classmethod
+    def _only_news_ids(cls, value: list[str]) -> list[str]:
+        # Models often stuff prose rationales into this field; keep only
+        # well-formed news_ids so the P3 evidence gate judges real citations
+        # (and catches fabricated ids), not sentences.
+        return [s for s in value if isinstance(s, str) and _NEWS_ID_RE.match(s)]
 
 
 # --- money-path order shape (mirrors orders_schema.Order, P0 §5.2) --------
