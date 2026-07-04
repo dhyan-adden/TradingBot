@@ -79,10 +79,10 @@ function escapeHtml(t) {
 
 document.getElementById('picker').addEventListener('change', e => selectRun(e.target.value));
 document.getElementById('runNow').addEventListener('click', async () => {
-  document.getElementById('status').textContent = 'starting...';
+  document.getElementById('status').textContent = 'starting run...';
   const r = await fetch('/api/run-now', { method: 'POST' }).then(x => x.json()).catch(() => ({}));
-  if (r.dir) { await loadRuns(); selectRun(r.dir); }
-  else document.getElementById('status').textContent = r.error || 'could not start';
+  if (r.error) { document.getElementById('status').textContent = r.error; return; }
+  setTimeout(async () => { await loadRuns(); const p = document.getElementById('picker'); if (p.value) selectRun(p.value); }, 2500);
 });
 
 loadRuns();

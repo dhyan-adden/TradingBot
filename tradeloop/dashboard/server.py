@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from tradeloop.dashboard.runs import list_runs, read_run
+
+
+def launch_propose(repo_root: Path, python: str = sys.executable, launcher=subprocess.Popen) -> str:
+    """Start a background PROPOSE cycle on the Claude backend. Suggestions only -
+    never routes. Returns "" (the run-dir name is minted inside the child; the
+    page just reloads the run list to pick up the newest). `repo_root` is the git
+    root (cwd for the child so `tradeloop` imports as a package)."""
+    env = dict(os.environ)
+    env["ZERODHA_ENABLE_DATA"] = "true"
+    env.setdefault("ZERODHA_ENABLE_TRADING", "false")
+    cmd = [python, "-m", "tradeloop.orchestrator", "premarket", "--backend", "claude"]
+    launcher(cmd, env=env, cwd=str(Path(repo_root)))
+    return ""
 
 
 def _safe_run_dir(runs_dir: Path, name: str) -> Path | None:
@@ -53,6 +69,16 @@ def make_handler(runs_dir: Path, static_dir: Path):
             if parsed.path.startswith("/api/"):
                 status, body = handle_api(parsed.path, parse_qs(parsed.query), runs_dir)
                 return self._json(status, body)
+            self._json(404, {"error": "not found"})
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/run-now":
+                try:
+                    launch_propose(runs_dir.parent.parent)  # tradeloop/runs -> tradeloop -> repo root
+                    return self._json(200, {"started": True, "dir": ""})
+                except Exception as exc:  # surface, don't crash the server
+                    return self._json(500, {"error": str(exc)})
             self._json(404, {"error": "not found"})
 
         def log_message(self, *args):  # quiet
