@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -15,6 +17,7 @@ from tradeloop.lib.data.sources.reddit import fetch_reddit
 from tradeloop.lib.data.sources.rss_native import fetch_rss
 from tradeloop.lib.data.ticker_master import TickerMaster, load_master
 from tradeloop.lib.data.tickers import extract
+from tradeloop.lib.data.universe import load_universe
 from tradeloop.lib.ta.scanner import scan_universe
 
 MACRO_TERMS = {"RBI", "INR", "RUPEE", "OIL", "FED", "FII", "DII", "INFLATION", "GDP"}
@@ -36,20 +39,26 @@ def _collect_news(http: Http, master: TickerMaster, cfg: dict) -> Tuple[List[Raw
     return items, macro
 
 
-def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 30,
+def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 2500,
         run_dir: Path = None, *, http=None, kite_client=None,
-        master: "TickerMaster | None" = None, config_dir: Path = Path("tradeloop/config")) -> Snapshot:
+        master: "TickerMaster | None" = None, config_dir: Path = Path("tradeloop/config"),
+        max_setups_downstream: "int | None" = None) -> Snapshot:
     assert run_dir is not None, "ingest.run requires run_dir"
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     if master is None:
         master = load_master(config_dir / "universe.yaml")
-    if symbols is None:
-        symbols = master.symbols()
     if http is None:
         http = Http(warmup_hosts=_NSE_WARMUP)
     cfg_path = config_dir / "news_sources.yaml"
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+    settings_path = config_dir / "settings.yaml"
+    uni = ((yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}).get("universe", {})
+           if settings_path.exists() else {})
+    min_turnover = float(uni.get("min_avg_daily_turnover_cr", 0)) * 1_00_00_000  # cr -> INR
+    pace = float(uni.get("pace_seconds", 0.0))
+    top_n = (max_setups_downstream if max_setups_downstream is not None
+             else int(uni.get("max_setups_downstream", 25)))
 
     all_items, macro = _collect_news(http, master, cfg)
     news_available = bool(all_items)
@@ -57,7 +66,22 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 30
 
     setups = []
     if kite_client is not None:
-        setups = scan_universe(symbols[:max_fetch], kite_client, as_of.date(), max_fetch=max_fetch)
+        if symbols is None and str(uni.get("source", "config_yaml")) == "full_nse":
+            symbols = load_universe(kite_client, config_dir / "universe_cache.json",
+                                    config_dir / "universe.yaml",
+                                    max_age_days=int(uni.get("cache_days", 7)),
+                                    max_symbols=int(uni.get("max_symbols", 2500)),
+                                    now=as_of.date())
+        elif symbols is None:
+            symbols = master.symbols()
+        setups = scan_universe(symbols[:max_fetch], kite_client, as_of.date(),
+                               max_fetch=max_fetch, min_turnover_inr=min_turnover,
+                               pace_seconds=pace)
+
+    # full ranked scan to disk (audit + dashboard); only the cleanest N go downstream
+    (run_dir / "full_scan.jsonl").write_text(
+        "".join(json.dumps(asdict(s)) + "\n" for s in setups), encoding="utf-8")
+    setups = setups[:top_n]
 
     (run_dir / "01_news_raw.md").write_text(
         render_news_raw(stories, macro, news_available), encoding="utf-8")

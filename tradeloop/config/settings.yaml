@@ -28,9 +28,14 @@ modes:
 
 universe:
   base_index: NIFTY500
+  source: full_nse            # full_nse (pull all NSE equities from Kite) | config_yaml (hand-listed symbols)
+  cache_days: 7               # how long the fetched instrument list is reused before refresh
   include_indices_as_context: [NIFTY50, BANKNIFTY, NIFTYIT, NIFTYAUTO, NIFTYPHARMA, NIFTYFMCG]
-  min_avg_daily_turnover_cr: 5
+  min_avg_daily_turnover_cr: 5   # liquidity floor in Rs crore (5cr = 50,000,000 INR); 0 disables
   exclude_segments: [SME, ETF_LEVERAGED]
+  pace_seconds: 0.34          # delay between historical calls (~3 req/s Kite limit)
+  max_symbols: 2500           # hard ceiling on symbols scanned
+  max_setups_downstream: 25   # cleanest-N setups fed to the AI stages (full scan still saved to disk)
 
 shortlist:
   target_size: 12
