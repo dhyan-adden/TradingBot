@@ -82,7 +82,10 @@ async function kiteRequest<T>(
     throw new Error(`Kite API ${response.status}: ${JSON.stringify(data)}`);
   }
 
-  return data as T;
+  // Kite wraps every success as {status, data:{...}}; callers (and the Python
+  // client) expect the unwrapped payload. Fall back to the raw body for any
+  // endpoint that doesn't wrap.
+  return (data?.data ?? data) as T;
 }
 
 const server = new McpServer({

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from tradeloop.lib.data.ingest import run as ingest_run
+from tradeloop.lib.data.kite import KiteClient
 from tradeloop.lib.data.snapshot import render_news_raw, render_setups
 from tradeloop.lib.portfolio.state import empty_state_from_settings, render_context
 from tradeloop.lib.util.ist_clock import IST
@@ -17,7 +19,7 @@ from tradeloop.lib.util.ist_clock import IST
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(mode: str, request: str = "", root: Path | None = None) -> Path:
+def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=None) -> Path:
     base = root or ROOT
     now = datetime.now(IST)
     run_dir = base / "runs" / f"{now:%Y-%m-%d_%H%M}_{mode}"
@@ -37,13 +39,17 @@ def prepare(mode: str, request: str = "", root: Path | None = None) -> Path:
             raise ValueError("adhoc mode requires --request text")
         (run_dir / "user_request.md").write_text(f"# User Request\n\n{request_text}\n", encoding="utf-8")
 
-    # Real research ingest behind the renderers: fetch news + (later) Kite setups,
+    # Real research ingest behind the renderers: fetch news + Kite setups,
     # tag, freeze the hashed snapshot, render 01_news_raw / 02_setups_raw.
     # base-relative config so --root / isolated deployments read the right universe.
-    # ponytail: news is live; Kite scan wired but dormant until a live smoke verifies
-    # auth - flip on by passing kite_client=KiteClient() here.
+    # Live Kite scan is opt-in via ZERODHA_ENABLE_DATA=true (read-only market data;
+    # kept independent of ZERODHA_ENABLE_TRADING so paper cycles still scan real
+    # setups). A stale/absent token degrades to an empty scan, not a crash, because
+    # scan_universe tolerates per-symbol data errors. Tests inject kite_client directly.
+    if kite_client is None and os.getenv("ZERODHA_ENABLE_DATA", "false").strip().lower() == "true":
+        kite_client = KiteClient()
     try:
-        ingest_run(now, run_dir=run_dir, config_dir=base / "config")
+        ingest_run(now, run_dir=run_dir, config_dir=base / "config", kite_client=kite_client)
     except Exception as exc:  # degrade-not-abort: never leave a silent blank
         (run_dir / "01_news_raw.md").write_text(
             render_news_raw([], [], news_available=False), encoding="utf-8")
