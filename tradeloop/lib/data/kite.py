@@ -96,9 +96,9 @@ class KiteClient:
         raw = self.transport.call_tool("zerodha_ohlc", {"instruments": [key]})
         return raw.get(key, {})
 
-    def instruments(self, exchange: str = "NSE", instrument_type: str = "EQ") -> dict:
+    def instruments(self, exchange: str = "NSE", mainboard_only: bool = True) -> dict:
         raw = self.transport.call_tool(
-            "zerodha_instruments", {"exchange": exchange, "instrument_type": instrument_type}
+            "zerodha_instruments", {"exchange": exchange, "mainboard_only": mainboard_only}
         )
         out: dict = {}
         for row in raw.get("instruments", []):

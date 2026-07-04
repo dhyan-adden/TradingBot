@@ -42,7 +42,7 @@ def load_universe(kite_client, cache_path: Path, yaml_path: Path,
 
     if kite_client is not None:
         try:
-            symbols = sorted(kite_client.instruments("NSE", "EQ").keys())
+            symbols = sorted(kite_client.instruments("NSE").keys())
             if symbols:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 cache_path.write_text(

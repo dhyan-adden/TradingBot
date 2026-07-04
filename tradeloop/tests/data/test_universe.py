@@ -9,7 +9,7 @@ class FakeKite:
         self._symbols = symbols
         self.called = 0
 
-    def instruments(self, exchange="NSE", instrument_type="EQ"):
+    def instruments(self, exchange="NSE", mainboard_only=True):
         self.called += 1
         return {s: i for i, s in enumerate(self._symbols, start=1)}
 

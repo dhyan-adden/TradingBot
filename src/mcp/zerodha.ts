@@ -276,14 +276,18 @@ server.registerTool(
 server.registerTool(
   "zerodha_instruments",
   {
-    title: "List instruments",
-    description: "List all instruments for an exchange, filtered by instrument_type (default EQ). Returns [{tradingsymbol, instrument_token}].",
+    title: "List cash-equity instruments",
+    description:
+      "List tradeable cash equities for an exchange as [{tradingsymbol, instrument_token}]. " +
+      "Keeps the cash segment (segment == exchange, so indices are dropped) and, when mainboard_only " +
+      "(default true), drops suffixed non-mainboard series (SME, government securities, bonds, trade-to-trade), " +
+      "which on NSE all carry a '-' in the tradingsymbol.",
     inputSchema: {
       exchange: z.string().min(1),
-      instrument_type: z.string().default("EQ")
+      mainboard_only: z.boolean().default(true)
     }
   },
-  async ({ exchange, instrument_type }) => {
+  async ({ exchange, mainboard_only }) => {
     const { apiKey, accessToken } = requireCredentials();
     const resp = await fetch(buildUrl(`/instruments/${encodeURIComponent(exchange)}`), {
       headers: new Headers({ Authorization: `token ${apiKey}:${accessToken}`, "X-Kite-Version": "3" })
@@ -293,14 +297,16 @@ server.registerTool(
     const header = rows[0].split(",");
     const tokIdx = header.indexOf("instrument_token");
     const symIdx = header.indexOf("tradingsymbol");
-    const typeIdx = header.indexOf("instrument_type");
+    const segIdx = header.indexOf("segment");
     const out: { tradingsymbol: string; instrument_token: number }[] = [];
     for (const row of rows.slice(1)) {
       const cols = row.split(",");
-      if (typeIdx >= 0 && cols[typeIdx] !== instrument_type) continue;
+      if (segIdx >= 0 && cols[segIdx] !== exchange) continue; // drop indices (segment INDICES) & derivatives
+      const sym = cols[symIdx];
+      if (mainboard_only && sym.includes("-")) continue;      // drop SME / gov-sec / bonds / T2T series
       const token = Number(cols[tokIdx]);
       if (!Number.isFinite(token)) continue;
-      out.push({ tradingsymbol: cols[symIdx], instrument_token: token });
+      out.push({ tradingsymbol: sym, instrument_token: token });
     }
     return textJson({ instruments: out });
   }
