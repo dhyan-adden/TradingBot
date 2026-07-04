@@ -157,6 +157,51 @@ _ANALYSIS_BUILDERS = {
 }
 
 
+_RISK = {"approve": "approved as-is", "resize": "approved but resized", "reject": "rejected"}
+
+
+def _trade_plan(raw: dict) -> tuple[str, list[str]]:
+    tickets = raw.get("tickets") or []
+    points = []
+    for t in tickets:
+        points.append(
+            f"{t.get('side','BUY')} {t.get('quantity','?')} shares of {pretty_ticker(t.get('ticker',''))} "
+            f"at {t.get('entry','?')}, stop {t.get('hard_stop','?')}, "
+            f"targets {t.get('target_1','?')} / {t.get('target_2','?')}. Why: {t.get('thesis','')}")
+    return (f"{len(tickets)} trade plan(s) drawn up." if tickets else "No trade plans - nothing qualified."), points
+
+
+def _risk(raw: dict) -> tuple[str, list[str]]:
+    rows = raw.get("decisions") or []
+    points = []
+    for r in rows:
+        q = r.get("resized_quantity")
+        qty = f" to {q} shares" if r.get("decision") == "resize" and q is not None else ""
+        why = ("; ".join(r.get("reasons") or []))
+        points.append(f"{pretty_ticker(r.get('ticker',''))}: {_RISK.get(r.get('decision'), r.get('decision',''))}{qty}"
+                      + (f" - {why}" if why else ""))
+    return ("Risk check on each plan." if points else "No plans reached the risk check."), points
+
+
+def render_decision(orders_json: dict) -> StageView:
+    icon, title, role = _meta("41_pm_decision")
+    orders = (orders_json or {}).get("orders") or []
+    if not orders:
+        summary = "Holding today - nothing convincing enough to propose."
+        points = []
+    else:
+        first = orders[0]
+        summary = (f"Proposing to {first.get('side','BUY')} {first.get('quantity','?')} shares of "
+                   f"{pretty_ticker(first.get('ticker',''))} at {first.get('price','?')}.")
+        points = [f"{o.get('side','BUY')} {o.get('quantity','?')} {pretty_ticker(o.get('ticker',''))} "
+                  f"@ {o.get('price','?')} - {o.get('reason','')}" for o in orders]
+    return StageView(stage="41_pm_decision", icon=icon, title=title, role=role, summary=summary, points=points)
+
+
+_ANALYSIS_BUILDERS["30_trade_plan"] = _trade_plan
+_ANALYSIS_BUILDERS["40_risk_report"] = _risk
+
+
 def render_stage(stage: str, raw: dict) -> StageView:
     icon, title, role = _meta(stage)
     raw = raw or {}
