@@ -45,8 +45,21 @@ def test_falls_back_to_reliable_model_when_primary_returns_empty(tmp_path, monke
     assert isinstance(out, Shortlist)                 # recovered - did not raise
     assert calls["n"] == 4                            # 3 flaky primary + 1 fallback
     rec = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[-1])
-    assert rec["model"] == "xiaomi/mimo-v2.5"         # succeeded on the fallback
+    assert rec["model"] == "minimax/minimax-m3"       # first distinct fallback in the chain
     assert rec["used_model"] is True
+
+
+def test_fallback_is_distinct_even_when_primary_equals_default(tmp_path, monkeypatch):
+    # regression: when a stage's model IS the default (mimo), the fallback must still
+    # be a genuinely different model (minimax), not a no-op that leaves it unprotected.
+    empty = {"choices": [{"message": {"content": ""}}]}
+    ok = _load("or_ok_shortlist.json")
+    c, calls = _client(tmp_path, monkeypatch, [empty, empty, empty, ok])
+    out = c.call_json("14_shortlist", "system", "user", Shortlist,
+                      model="xiaomi/mimo-v2.5")
+    assert isinstance(out, Shortlist)                 # recovered despite mimo failing
+    rec = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[-1])
+    assert rec["model"] == "minimax/minimax-m3"       # fell to a DIFFERENT model
 
 
 def test_call_json_validates_and_records_provenance(tmp_path, monkeypatch):
@@ -93,7 +106,8 @@ def test_invalid_json_retried_then_raises(tmp_path, monkeypatch):
     c, calls = _client(tmp_path, monkeypatch, [_load("or_bad_json.json")])
     with pytest.raises(client_mod.LLMValidationError):
         c.call_json("14_shortlist", "s", "u", Shortlist)
-    assert calls["n"] == 3  # exhausted max_retries on invalid output
+    # mimo primary + minimax fallback, max_retries each -> only raises once BOTH exhaust
+    assert calls["n"] == 6
 
 
 def test_missing_api_key_raises(tmp_path, monkeypatch):

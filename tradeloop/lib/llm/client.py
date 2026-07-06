@@ -50,7 +50,7 @@ class LLMClient:
         api_key_env: str = "OPENROUTER_API_KEY",
         base_url: str = "https://openrouter.ai/api/v1",
         default_model: str = "xiaomi/mimo-v2.5",
-        fallback_model: str = "xiaomi/mimo-v2.5",
+        fallback_models: tuple[str, ...] = ("minimax/minimax-m3", "xiaomi/mimo-v2.5"),
         max_tokens: int = 4000,
         max_retries: int = 3,
         backoff_base: float = 0.5,
@@ -61,7 +61,7 @@ class LLMClient:
         self.api_key_env = api_key_env
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
-        self.fallback_model = fallback_model
+        self.fallback_models = tuple(fallback_models)
         self.max_tokens = max_tokens
         self.max_retries = max_retries
         self.backoff_base = backoff_base
@@ -94,13 +94,16 @@ class LLMClient:
             "are deterministic and final."
         )
 
-        # Try the assigned model, then a reliable fallback. A single flaky provider
-        # (e.g. deepseek-v4-flash returning empty content) must not kill the whole
-        # cycle - a completed run on the fallback beats a dead run, and the senior
-        # judge reviews everything downstream anyway.
+        # Try the assigned model, then a chain of DISTINCT fallbacks. A single flaky
+        # provider (deepseek-v4-flash OR mimo returning empty content) must not kill
+        # the cycle - a completed run on a fallback beats a dead run, and the senior
+        # judge reviews everything downstream anyway. Distinct is the point: the
+        # assigned model is skipped from the chain so a mimo-primary stage still gets
+        # a genuinely different model (minimax) to fall to.
         models = [model]
-        if self.fallback_model and self.fallback_model != model:
-            models.append(self.fallback_model)
+        for fb in self.fallback_models:
+            if fb not in models:
+                models.append(fb)
 
         last_exc: Exception | None = None
         for m in models:
