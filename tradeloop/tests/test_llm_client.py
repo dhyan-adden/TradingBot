@@ -33,6 +33,22 @@ def _client(tmp_path, monkeypatch, responses):
     return c, calls
 
 
+def test_falls_back_to_reliable_model_when_primary_returns_empty(tmp_path, monkeypatch):
+    # regression: deepseek-v4-flash returned empty content, exhausted retries, and
+    # killed the whole cycle (false "hold"). Now the assigned model failing should
+    # fall back to a reliable model instead of raising.
+    empty = {"choices": [{"message": {"content": ""}}]}
+    ok = _load("or_ok_shortlist.json")
+    c, calls = _client(tmp_path, monkeypatch, [empty, empty, empty, ok])
+    out = c.call_json("13_technical", "system", "user", Shortlist,
+                      model="deepseek/deepseek-v4-flash")
+    assert isinstance(out, Shortlist)                 # recovered - did not raise
+    assert calls["n"] == 4                            # 3 flaky primary + 1 fallback
+    rec = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[-1])
+    assert rec["model"] == "xiaomi/mimo-v2.5"         # succeeded on the fallback
+    assert rec["used_model"] is True
+
+
 def test_call_json_validates_and_records_provenance(tmp_path, monkeypatch):
     c, calls = _client(tmp_path, monkeypatch, [_load("or_ok_shortlist.json")])
     out = c.call_json("14_shortlist", "system", "user", Shortlist)

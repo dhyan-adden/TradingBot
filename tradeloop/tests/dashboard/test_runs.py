@@ -38,6 +38,19 @@ def test_read_run_live_when_no_decision(tmp_path):
     assert out["live"] is True
 
 
+def test_read_run_surfaces_reasoning_failure_not_a_hold(tmp_path):
+    d = tmp_path / "2026-07-06_1319_premarket"
+    d.mkdir()
+    (d / "10_news.json").write_text(json.dumps({"names_in_play": []}))
+    (d / "orders.json").write_text(json.dumps({"orders": [], "held": []}))  # placeholder
+    (d / "reasoning_error.txt").write_text("reasoning failed at 13_technical: empty content\n")
+    out = read_run(d)
+    assert out["error"]
+    assert out["live"] is False                      # failed, not "still running"
+    assert "did not finish" in out["decision"]["summary"]
+    assert "Holding" not in out["decision"]["summary"]
+
+
 def test_read_run_tolerates_missing_and_malformed_files(tmp_path):
     d = tmp_path / "2026-07-04_0900_premarket"
     d.mkdir()

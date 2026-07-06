@@ -54,7 +54,14 @@ def read_run(run_dir: Path) -> dict:
             continue  # not written yet
         stages.append(asdict(render_stage(stage, raw)))
     decision_raw = _load(run_dir / "41_pm_decision.json")
-    live = decision_raw is None
     orders = _load(run_dir / "orders.json") or {}
     decision = asdict(render_decision(orders))
-    return {"dir": run_dir.name, "live": live, "stages": stages, "decision": decision}
+    err_path = run_dir / "reasoning_error.txt"
+    error = err_path.read_text(encoding="utf-8").strip() if err_path.exists() else ""
+    if error:
+        # a crashed run must NOT read as a clean "hold" - say so plainly
+        decision["summary"] = "This run did not finish - " + error.splitlines()[0]
+    # a failed run is neither live nor a real decision; only "no decision yet" is live
+    live = decision_raw is None and not error
+    return {"dir": run_dir.name, "live": live, "stages": stages,
+            "decision": decision, "error": error}

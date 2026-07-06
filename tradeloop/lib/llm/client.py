@@ -50,6 +50,7 @@ class LLMClient:
         api_key_env: str = "OPENROUTER_API_KEY",
         base_url: str = "https://openrouter.ai/api/v1",
         default_model: str = "xiaomi/mimo-v2.5",
+        fallback_model: str = "xiaomi/mimo-v2.5",
         max_tokens: int = 4000,
         max_retries: int = 3,
         backoff_base: float = 0.5,
@@ -60,6 +61,7 @@ class LLMClient:
         self.api_key_env = api_key_env
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
+        self.fallback_model = fallback_model
         self.max_tokens = max_tokens
         self.max_retries = max_retries
         self.backoff_base = backoff_base
@@ -79,75 +81,83 @@ class LLMClient:
         # extra="ignore" silently defaults every field and the object comes back
         # hollow. The JSON Schema pins field names/types/required + enums.
         schema_hint = json.dumps(schema.model_json_schema(), separators=(",", ":"))
-        payload = {
-            "model": model,
-            "max_tokens": self.max_tokens,
-            # Best-effort structured-output nudge only. Correctness is guaranteed
-            # by our own brace-balanced extraction + pydantic validation below, so
-            # this stays broadly-supported (json_object, not strict json_schema
-            # which some providers 400 on) and is dropped on a 400 downgrade.
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        f"{system}\n\n"
-                        "You are one bounded agent inside an Indian-market paper trading "
-                        "system. India cash equities only, long-only. Return ONE compact JSON "
-                        "object and nothing else, conforming to this JSON Schema - use these "
-                        "EXACT field names (not prose labels), correct types, and every required "
-                        f"field:\n{schema_hint}\n"
-                        "When a claim rests on a news item, cite it by copying the bracketed "
-                        "[news_id] tokens from the input verbatim into the nearest 'evidence' "
-                        "array. Do not request order execution; risk, gate and broker controls "
-                        "are deterministic and final."
-                    ),
-                },
-                {"role": "user", "content": user},
-            ],
-        }
+        system_content = (
+            f"{system}\n\n"
+            "You are one bounded agent inside an Indian-market paper trading "
+            "system. India cash equities only, long-only. Return ONE compact JSON "
+            "object and nothing else, conforming to this JSON Schema - use these "
+            "EXACT field names (not prose labels), correct types, and every required "
+            f"field:\n{schema_hint}\n"
+            "When a claim rests on a news item, cite it by copying the bracketed "
+            "[news_id] tokens from the input verbatim into the nearest 'evidence' "
+            "array. Do not request order execution; risk, gate and broker controls "
+            "are deterministic and final."
+        )
+
+        # Try the assigned model, then a reliable fallback. A single flaky provider
+        # (e.g. deepseek-v4-flash returning empty content) must not kill the whole
+        # cycle - a completed run on the fallback beats a dead run, and the senior
+        # judge reviews everything downstream anyway.
+        models = [model]
+        if self.fallback_model and self.fallback_model != model:
+            models.append(self.fallback_model)
 
         last_exc: Exception | None = None
-        for attempt in range(self.max_retries):
-            try:
-                response = httpx.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}",
-                             "Content-Type": "application/json"},
-                    json=payload,
-                    timeout=self.timeout_seconds,
-                )
-                response.raise_for_status()
-                body = response.json()
-                text = _extract_output_text(body)
-                obj = _parse_json_object(text)
-                validated = schema.model_validate(obj)
-            except (httpx.HTTPError, ValueError, ValidationError) as exc:
-                last_exc = exc
-                # Graceful downgrade: some providers reject response_format with a
-                # 400. Drop it so the next attempt relies on the prompt + our
-                # extraction instead of hard-failing the whole cycle.
-                if (isinstance(exc, httpx.HTTPStatusError)
-                        and exc.response.status_code == 400
-                        and "response_format" in payload):
-                    payload.pop("response_format", None)
-                self._record(_failed_record(role, model, prompt, str(exc)))
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.backoff_base * (2 ** attempt))
-                continue
-            self._record(CallRecord(
-                role=role, model=model,
-                model_version=str(body.get("model", model)),
-                response_id=str(body.get("id", "")),
-                prompt=prompt, response=text,
-                prompt_tokens=int(body.get("usage", {}).get("prompt_tokens", 0)),
-                completion_tokens=int(body.get("usage", {}).get("completion_tokens", 0)),
-                total_tokens=int(body.get("usage", {}).get("total_tokens", 0)),
-                used_model=True,
-            ))
-            return validated
+        for m in models:
+            payload = {
+                "model": m,
+                "max_tokens": self.max_tokens,
+                # Best-effort structured-output nudge only. Correctness is guaranteed
+                # by our own brace-balanced extraction + pydantic validation below, so
+                # this stays broadly-supported (json_object, not strict json_schema
+                # which some providers 400 on) and is dropped on a 400 downgrade.
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user},
+                ],
+            }
+            for attempt in range(self.max_retries):
+                try:
+                    response = httpx.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {api_key}",
+                                 "Content-Type": "application/json"},
+                        json=payload,
+                        timeout=self.timeout_seconds,
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                    text = _extract_output_text(body)
+                    obj = _parse_json_object(text)
+                    validated = schema.model_validate(obj)
+                except (httpx.HTTPError, ValueError, ValidationError) as exc:
+                    last_exc = exc
+                    # Graceful downgrade: some providers reject response_format with a
+                    # 400. Drop it so the next attempt relies on the prompt + our
+                    # extraction instead of hard-failing the whole cycle.
+                    if (isinstance(exc, httpx.HTTPStatusError)
+                            and exc.response.status_code == 400
+                            and "response_format" in payload):
+                        payload.pop("response_format", None)
+                    self._record(_failed_record(role, m, prompt, str(exc)))
+                    if attempt < self.max_retries - 1:
+                        time.sleep(self.backoff_base * (2 ** attempt))
+                    continue
+                self._record(CallRecord(
+                    role=role, model=m,
+                    model_version=str(body.get("model", m)),
+                    response_id=str(body.get("id", "")),
+                    prompt=prompt, response=text,
+                    prompt_tokens=int(body.get("usage", {}).get("prompt_tokens", 0)),
+                    completion_tokens=int(body.get("usage", {}).get("completion_tokens", 0)),
+                    total_tokens=int(body.get("usage", {}).get("total_tokens", 0)),
+                    used_model=True,
+                ))
+                return validated
 
-        raise LLMValidationError(f"{role} @ {model} failed after {self.max_retries} tries: {last_exc}")
+        raise LLMValidationError(
+            f"{role} failed on {models} after {self.max_retries} tries each: {last_exc}")
 
     def _record(self, record: CallRecord) -> None:
         with self.audit_path.open("a", encoding="utf-8") as fh:

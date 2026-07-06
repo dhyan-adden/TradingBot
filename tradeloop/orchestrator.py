@@ -111,7 +111,14 @@ def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int, client=Non
     for name in dag:
         if time.monotonic() > deadline:
             return -1
-        stages.run_stage(name, run_dir, client)
+        try:
+            stages.run_stage(name, run_dir, client)
+        except Exception as exc:  # a stage that can't produce valid output must not
+            # crash mid-cycle and leave a partial run that looks like a clean "hold".
+            # Record it loudly and fail the cycle; run_cycle -> REASONING_FAILED.
+            (run_dir / "reasoning_error.txt").write_text(
+                f"reasoning failed at {name}: {exc}\n", encoding="utf-8")
+            return -2
 
     if "41_pm_decision" in dag:
         pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
