@@ -32,6 +32,8 @@ universe:
   cache_days: 7               # how long the fetched instrument list is reused before refresh
   include_indices_as_context: [NIFTY50, BANKNIFTY, NIFTYIT, NIFTYAUTO, NIFTYPHARMA, NIFTYFMCG]
   min_avg_daily_turnover_cr: 5   # liquidity floor in Rs crore (5cr = 50,000,000 INR); 0 disables
+  min_stop_distance_pct: 1.0     # reject setups whose ATR stop is tighter than this % (kills
+                                 # near-zero-volatility junk e.g. cash ETFs); 0 disables
   exclude_segments: [SME, ETF_LEVERAGED]
   pace_seconds: 0.34          # delay between historical calls (~3 req/s Kite limit)
   max_symbols: 2500           # hard ceiling on symbols scanned

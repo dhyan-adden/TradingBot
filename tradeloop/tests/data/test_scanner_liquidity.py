@@ -37,6 +37,22 @@ def test_liquidity_floor_keeps_liquid_symbol():
     assert scan is not None and scan.ticker == "LIQ"
 
 
+def test_min_stop_floor_drops_near_zero_volatility_setup():
+    # a near-flat rising series: tiny ATR -> stop < 1% away -> dropped (the cash-ETF case)
+    flat = [Candle(date=f"2026-01-{(i % 28) + 1:02d}", open=100.0 + i * 0.01,
+                   high=100.0 + i * 0.01 + 0.02, low=100.0 + i * 0.01 - 0.02,
+                   close=100.0 + i * 0.01, volume=1_000_000) for i in range(60)]
+    kite = FakeKite({"CASHETF": flat})
+    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.01) is None
+    # same series with the floor off still yields a setup (proves the floor is the cause)
+    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.0) is not None
+
+
+def test_min_stop_floor_keeps_real_volatility_setup():
+    kite = FakeKite({"REAL": _candles(50.0, 1_000_000)})  # ~0.5/step moves -> real ATR
+    assert scan_symbol("REAL", kite, date(2026, 2, 2), min_stop_pct=0.01) is not None
+
+
 def test_scan_universe_paces_each_symbol():
     kite = FakeKite({"A": _candles(50.0, 1_000_000), "B": _candles(50.0, 1_000_000)})
     naps = []

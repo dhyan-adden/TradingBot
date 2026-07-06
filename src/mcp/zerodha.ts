@@ -284,10 +284,11 @@ server.registerTool(
       "which on NSE all carry a '-' in the tradingsymbol.",
     inputSchema: {
       exchange: z.string().min(1),
-      mainboard_only: z.boolean().default(true)
+      mainboard_only: z.boolean().default(true),
+      exclude_etf: z.boolean().default(true)
     }
   },
-  async ({ exchange, mainboard_only }) => {
+  async ({ exchange, mainboard_only, exclude_etf }) => {
     const { apiKey, accessToken } = requireCredentials();
     const resp = await fetch(buildUrl(`/instruments/${encodeURIComponent(exchange)}`), {
       headers: new Headers({ Authorization: `token ${apiKey}:${accessToken}`, "X-Kite-Version": "3" })
@@ -298,12 +299,14 @@ server.registerTool(
     const tokIdx = header.indexOf("instrument_token");
     const symIdx = header.indexOf("tradingsymbol");
     const segIdx = header.indexOf("segment");
+    const nameIdx = header.indexOf("name");
     const out: { tradingsymbol: string; instrument_token: number }[] = [];
     for (const row of rows.slice(1)) {
       const cols = row.split(",");
       if (segIdx >= 0 && cols[segIdx] !== exchange) continue; // drop indices (segment INDICES) & derivatives
       const sym = cols[symIdx];
       if (mainboard_only && sym.includes("-")) continue;      // drop SME / gov-sec / bonds / T2T series
+      if (exclude_etf && nameIdx >= 0 && /\bETF\b/i.test(cols[nameIdx])) continue; // funds, not stocks
       const token = Number(cols[tokIdx]);
       if (!Number.isFinite(token)) continue;
       out.push({ tradingsymbol: sym, instrument_token: token });

@@ -36,7 +36,8 @@ def candles_to_frame(candles: List[Candle]) -> pd.DataFrame:
     })
 
 
-def scan_symbol(symbol: str, kite_client, as_of: date, min_turnover_inr: float = 0.0) -> "SetupScan | None":
+def scan_symbol(symbol: str, kite_client, as_of: date, min_turnover_inr: float = 0.0,
+                min_stop_pct: float = 0.0) -> "SetupScan | None":
     frm = as_of - timedelta(days=200)
     candles = kite_client.historical(symbol, frm, as_of, "day")
     if len(candles) < 30:
@@ -55,6 +56,11 @@ def scan_symbol(symbol: str, kite_client, as_of: date, min_turnover_inr: float =
             return None
     atr_value = float(atr_series.iloc[-1])
     latest = closes[-1]
+    # minimum-volatility floor: a stop tighter than min_stop_pct is not a real swing
+    # setup - it means near-zero volatility (e.g. liquid/cash ETFs that only drift up)
+    # and would force a dangerously oversized position for a fixed rupee risk.
+    if min_stop_pct > 0 and latest > 0 and (1.5 * atr_value) / latest < min_stop_pct:
+        return None
     breakout_signal = breakout(closes, 20)
     pullback_signal = pullback(closes, ema20)
     volume_signal = volume_spike(volumes, 20) if volumes else None
@@ -89,13 +95,14 @@ _TOLERATED = (ValueError, RuntimeError)
 
 def scan_universe(symbols: Iterable[str], kite_client, as_of: date, max_fetch: int = 2500,
                   min_turnover_inr: float = 0.0, pace_seconds: float = 0.0,
-                  sleep=time.sleep) -> List["SetupScan"]:
+                  sleep=time.sleep, min_stop_pct: float = 0.0) -> List["SetupScan"]:
     scans: List[SetupScan] = []
     for symbol in list(symbols)[:max_fetch]:
         if pace_seconds > 0:
             sleep(pace_seconds)  # respect Kite ~3 req/s
         try:
-            scan = scan_symbol(symbol, kite_client, as_of, min_turnover_inr=min_turnover_inr)
+            scan = scan_symbol(symbol, kite_client, as_of, min_turnover_inr=min_turnover_inr,
+                               min_stop_pct=min_stop_pct)
         except _TOLERATED as exc:
             log.warning("scan skipped %s: %s", symbol, exc)
             continue

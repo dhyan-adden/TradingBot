@@ -38,6 +38,33 @@ def test_reads_fresh_cache_without_calling_kite(tmp_path):
     assert kite.called == 0  # cache fresh (1 day old)
 
 
+def test_fresh_fetch_caches_tokens_and_hit_reseeds_client(tmp_path):
+    # regression: a cache HIT must re-seed the client's token cache from the persisted
+    # map, or every historical() call would re-download the whole instrument CSV.
+    cache = tmp_path / "universe_cache.json"
+
+    class TokenKite:
+        def __init__(self):
+            self._token_cache = {}
+            self.called = 0
+
+        def instruments(self, exchange="NSE", mainboard_only=True):
+            self.called += 1
+            m = {"AAA": 111, "BBB": 222}
+            self._token_cache.update(m)  # real client seeds here too
+            return m
+
+    k1 = TokenKite()
+    load_universe(k1, cache, _yaml(tmp_path), now=date(2026, 7, 6))
+    assert json.loads(cache.read_text())["tokens"] == {"AAA": 111, "BBB": 222}
+
+    # a SECOND client hits the fresh cache (no fetch) but still gets its tokens seeded
+    k2 = TokenKite()
+    load_universe(k2, cache, _yaml(tmp_path), now=date(2026, 7, 6))
+    assert k2.called == 0
+    assert k2._token_cache == {"AAA": 111, "BBB": 222}
+
+
 def test_stale_cache_triggers_refetch(tmp_path):
     cache = tmp_path / "universe_cache.json"
     cache.write_text(json.dumps({"fetched": "2026-06-01", "symbols": ["OLD"]}))

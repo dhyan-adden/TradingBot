@@ -59,6 +59,7 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
     uni = ((yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}).get("universe", {})
            if settings_path.exists() else {})
     min_turnover = float(uni.get("min_avg_daily_turnover_cr", 0)) * 1_00_00_000  # cr -> INR
+    min_stop = float(uni.get("min_stop_distance_pct", 0)) / 100.0  # pct -> fraction
     pace = float(uni.get("pace_seconds", 0.0))
     top_n = (max_setups_downstream if max_setups_downstream is not None
              else int(uni.get("max_setups_downstream", 25)))
@@ -79,7 +80,7 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
             symbols = master.symbols()
         setups = scan_universe(symbols[:max_fetch], kite_client, as_of.date(),
                                max_fetch=max_fetch, min_turnover_inr=min_turnover,
-                               pace_seconds=pace)
+                               pace_seconds=pace, min_stop_pct=min_stop)
 
     # full ranked scan to disk (audit + dashboard)
     (run_dir / "full_scan.jsonl").write_text(
