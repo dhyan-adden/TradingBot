@@ -99,9 +99,10 @@ def _meta(stage: str) -> tuple[str, str, str]:
 def _news(raw: dict) -> tuple[str, list[str]]:
     names = raw.get("names_in_play") or []
     macro = (raw.get("macro_context") or "").strip()
-    summary = macro or "Scanned the morning's headlines."
     points = [f"{pretty_ticker(n.get('ticker',''))}: {n.get('catalyst','')} (tier {n.get('tier','?')})"
               for n in names]
+    summary = macro or (f"{len(points)} name(s) with a story today."
+                        if points else "No fresh stock-specific news today.")
     if not points:
         points = ["No fresh stock-specific news stood out today."]
     return summary, points
@@ -109,34 +110,48 @@ def _news(raw: dict) -> tuple[str, list[str]]:
 
 def _sentiment(raw: dict) -> tuple[str, list[str]]:
     scores = raw.get("scores") or []
-    points = []
+    points, pos, neg = [], 0, 0
     for s in scores:
         val = s.get("sentiment_score", 0)
+        if val > 0.15:
+            pos += 1
+        elif val < -0.15:
+            neg += 1
         mood = "positive" if val > 0.15 else "negative" if val < -0.15 else "neutral"
         echo = " (looks like echo-chamber buzz)" if s.get("echo_chamber_flag") else ""
         points.append(f"{pretty_ticker(s.get('ticker',''))}: {mood} mood{echo}")
-    return ("How the crowd feels about each name." if points else "No notable social buzz."), points
+    summary = (f"{len(points)} name(s): {pos} positive, {neg} negative." if points
+               else "No notable social buzz.")
+    return summary, points
 
 
 def _fundamentals(raw: dict) -> tuple[str, list[str]]:
     tags = raw.get("tags") or []
-    points = []
+    points, flagged = [], 0
     for t in tags:
+        if t.get("tag") in ("yellow", "red"):
+            flagged += 1
         flags = ", ".join(t.get("red_flags") or [])
         extra = f" - {flags}" if flags else ""
         points.append(f"{pretty_ticker(t.get('ticker',''))}: {_TAG.get(t.get('tag'), t.get('tag',''))}{extra}")
-    return ("Financial-health check on each candidate." if points else "No fundamentals flagged."), points
+    summary = (f"{len(points)} checked, {flagged} with concerns." if points
+               else "No fundamentals flagged.")
+    return summary, points
 
 
 def _technical(raw: dict) -> tuple[str, list[str]]:
     setups = raw.get("setups") or []
-    points = []
+    points, confirmed = [], 0
     for s in setups:
+        if s.get("news_confirmed"):
+            confirmed += 1
         cls = _CLASSIFY.get(s.get("classification"), s.get("classification", ""))
-        confirmed = " (news backs it up)" if s.get("news_confirmed") else ""
+        backed = " (news backs it up)" if s.get("news_confirmed") else ""
         note = f" - {s.get('notes')}" if s.get("notes") else ""
-        points.append(f"{pretty_ticker(s.get('ticker',''))}: {cls}{confirmed}{note}")
-    return ("What the price charts say." if points else "No clean chart setups today."), points
+        points.append(f"{pretty_ticker(s.get('ticker',''))}: {cls}{backed}{note}")
+    summary = (f"{len(points)} clean setup(s), {confirmed} news-backed." if points
+               else "No clean chart setups today.")
+    return summary, points
 
 
 def _shortlist(raw: dict) -> tuple[str, list[str]]:
@@ -152,7 +167,8 @@ def _shortlist(raw: dict) -> tuple[str, list[str]]:
 def _args(raw: dict, lead: str) -> tuple[str, list[str]]:
     args = raw.get("arguments") or []
     points = [f"{pretty_ticker(a.get('ticker',''))}: {a.get('claim','')}" for a in args]
-    return (lead if points else lead + " (nothing to argue today)"), points
+    summary = (f"{lead} {len(points)} name(s)." if points else f"{lead} nothing to argue today.")
+    return summary, points
 
 
 def _debate(raw: dict) -> tuple[str, list[str]]:
@@ -190,14 +206,19 @@ def _trade_plan(raw: dict) -> tuple[str, list[str]]:
 
 def _risk(raw: dict) -> tuple[str, list[str]]:
     rows = raw.get("decisions") or []
-    points = []
+    points, counts = [], {"approve": 0, "resize": 0, "reject": 0}
     for r in rows:
+        d = r.get("decision")
+        if d in counts:
+            counts[d] += 1
         q = r.get("resized_quantity")
-        qty = f" to {q} shares" if r.get("decision") == "resize" and q is not None else ""
+        qty = f" to {q} shares" if d == "resize" and q is not None else ""
         why = ("; ".join(r.get("reasons") or []))
-        points.append(f"{pretty_ticker(r.get('ticker',''))}: {_RISK.get(r.get('decision'), r.get('decision',''))}{qty}"
+        points.append(f"{pretty_ticker(r.get('ticker',''))}: {_RISK.get(d, d or '')}{qty}"
                       + (f" - {why}" if why else ""))
-    return ("Risk check on each plan." if points else "No plans reached the risk check."), points
+    summary = (f"{counts['approve']} approved, {counts['resize']} resized, {counts['reject']} rejected."
+               if points else "No plans reached the risk check.")
+    return summary, points
 
 
 def render_decision(orders_json: dict) -> StageView:

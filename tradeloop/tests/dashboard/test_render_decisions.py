@@ -15,7 +15,8 @@ def test_risk_card_translates_decision():
                          "resized_quantity": 14, "reasons": ["position cap"]}]}
     view = render_stage("40_risk_report", raw)
     p = " ".join(view.points)
-    assert "HDFC Bank" in p and "14" in p and "resize" not in view.summary.lower()
+    assert "HDFC Bank" in p and "14" in p and "resized" in p  # raw enum translated
+    assert "1 resized" in view.summary  # summary carries the count breakdown, not fluff
 
 
 def test_decision_card_buy():
