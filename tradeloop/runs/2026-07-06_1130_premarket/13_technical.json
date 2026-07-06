@@ -1,0 +1,117 @@
+{
+  "evidence": [],
+  "setups": [
+    {
+      "evidence": [
+        "6246e0bf3b88",
+        "cf69a0a2b70b",
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "classification": "bullish_entry",
+      "news_confirmed": true,
+      "notes": "Q1 business update shows strong loan/deposit growth. Positive broker upgrade. Chart breakout with volume normal, confirming catalyst. Entry near support."
+    },
+    {
+      "evidence": [
+        "1a5aafe04d32",
+        "a0fbe3a60644",
+        "7e9364855c16"
+      ],
+      "ticker": "ICICIBANK",
+      "classification": "bullish_entry",
+      "news_confirmed": true,
+      "notes": "Dollar bond issuance catalyst plus management clarity. Breakout with normal volume — mild but credible setup."
+    },
+    {
+      "evidence": [
+        "eaada867043d",
+        "9a3c505e3009"
+      ],
+      "ticker": "TCS",
+      "classification": "avoid",
+      "news_confirmed": true,
+      "notes": "AI disruption fears and multi-year low price. No technical uptrend confirmed. Risk of further decline outweighs any late rebound."
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "eaada867043d"
+      ],
+      "ticker": "INFY",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Accumulate rating from analyst but sector headwinds remain severe. Breakout fragile — watch for confirmation before entry."
+    },
+    {
+      "evidence": [],
+      "ticker": "GODREJCP",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d breakout with above-threshold volume. High score (8.0). No news catalyst cited but technical strength is unambiguous."
+    },
+    {
+      "evidence": [],
+      "ticker": "NESCO",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout with strong volume. Score 8.0. Clean chart, no negative news."
+    },
+    {
+      "evidence": [],
+      "ticker": "SHAKTIPUMP",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Sharp breakout, volume well above average. High score 8.0. Momentum is intact."
+    },
+    {
+      "evidence": [],
+      "ticker": "SOBHA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Real estate momentum continues. Breakout with strong volume, score 8.0."
+    },
+    {
+      "evidence": [],
+      "ticker": "AEGISVOPAK",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Strong breakout, volume above threshold. Score 8.0, room to run."
+    },
+    {
+      "evidence": [],
+      "ticker": "BLSE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Solid breakout with volume confirmation. Score 8.0."
+    },
+    {
+      "evidence": [],
+      "ticker": "DALMIASUG",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Sugar sector momentum. Breakout with volume. Score 8.0."
+    },
+    {
+      "evidence": [],
+      "ticker": "DIACABS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Strong move with high volume, score 8.0."
+    },
+    {
+      "evidence": [],
+      "ticker": "DIGITIDE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout with volume, score 8.0. Sector tailwind from digital transformation."
+    },
+    {
+      "evidence": [],
+      "ticker": "SOLARWORLD",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clear breakout with above-threshold volume. Score 8.0."
+    }
+  ]
+}

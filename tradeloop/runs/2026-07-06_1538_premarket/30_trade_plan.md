@@ -1,0 +1,33 @@
+# 30_trade_plan
+
+```json
+{
+  "evidence": [
+    "a9e1c627e0e7",
+    "cf69a0a2b70b",
+    "fdf246ccae4d",
+    "7e5447803a21",
+    "1a5aafe04d32"
+  ],
+  "tickets": [
+    {
+      "evidence": [
+        "7e5447803a21",
+        "1a5aafe04d32"
+      ],
+      "ticker": "ICICIBANK",
+      "side": "BUY",
+      "product": "CNC",
+      "strategy_family": "20d_breakout",
+      "entry": 1426.5,
+      "hard_stop": 1391.85,
+      "target_1": 1472.7,
+      "target_2": 1495.8,
+      "quantity": 4,
+      "time_horizon": "2-4 weeks",
+      "thesis": "ICICIBANK has the highest debate conviction (7/10, 'tradeable') and is news-confirmed bullish via a positive Q1 update and bond sale plans. The scanner flags a 20d breakout above 1426.50 with normal volume confirmation, entry/stop/targets all derived from live ATR. Risk per share is ~₹34.65 (~2.4%); with ₹100k paper equity we size to 4 shares (~₹5,706, ~5.7% of book) to keep risk well under the 1R cap. T1 ₹1472.70 (~3.2%) and T2 ₹1495.80 (~4.9%) give a favorable ~2:1 R:R against the stop. Setup matches the 20d breakout playbook already stored in memory.",
+      "conviction": 7.0
+    }
+  ]
+}
+```
