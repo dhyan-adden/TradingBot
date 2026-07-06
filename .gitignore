@@ -11,3 +11,7 @@ state/**/*.db-*
 .DS_Store
 .superpowers/
 *.egg-info/
+
+# rebuildable / transient scan artifacts (not audit trail)
+tradeloop/config/universe_cache.json
+tradeloop/_scan_archive/
