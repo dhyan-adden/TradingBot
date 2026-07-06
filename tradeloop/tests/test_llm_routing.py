@@ -24,9 +24,10 @@ def test_decision_stages_use_minimax():
         assert routing.model_for(s) == "minimax/minimax-m3"
 
 
-def test_classify_stages_use_hy3():
+def test_classify_stages_use_flash():
+    # hy3-preview demoted 2026-07-06: empty/truncated content on real payloads
     for s in ("05_adhoc_intake", "11_sentiment"):
-        assert routing.model_for(s) == "tencent/hy3-preview"
+        assert routing.model_for(s) == "deepseek/deepseek-v4-flash"
 
 
 def test_news_and_technical_use_flash():

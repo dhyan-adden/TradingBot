@@ -14,9 +14,9 @@ Four models chosen for fitness per stage: minimax = decisions, mimo = analysis/r
 
 | Stage | Team | Model |
 | --- | --- | --- |
-| `05_adhoc_intake` | Ad Hoc Intake | `tencent/hy3-preview` |
+| `05_adhoc_intake` | Ad Hoc Intake | `deepseek/deepseek-v4-flash` |
 | `10_news` | News Analyst | `deepseek/deepseek-v4-flash` |
-| `11_sentiment` | Sentiment Analyst | `tencent/hy3-preview` |
+| `11_sentiment` | Sentiment Analyst | `deepseek/deepseek-v4-flash` |
 | `12_fundamentals` | Fundamentals Analyst | `xiaomi/mimo-v2.5` |
 | `13_technical` | Technical Analyst | `deepseek/deepseek-v4-flash` |
 | `14_shortlist` | Shortlister | `xiaomi/mimo-v2.5` |
@@ -28,7 +28,7 @@ Four models chosen for fitness per stage: minimax = decisions, mimo = analysis/r
 | `41_pm_decision` | Portfolio Manager | `minimax/minimax-m3` |
 | `50_post_trade` | Post Trade Analyst | `xiaomi/mimo-v2.5` |
 
-`tencent/hy3-preview` has no native structured-output support, so it is confined to the two lowest-stakes stages where the client's json_object -> brace-balanced-extraction fallback carries it; the other three support structured output directly.
+`tencent/hy3-preview` was demoted from the DAG on 2026-07-06 after returning empty/truncated content on real payloads; it also has no native structured-output support. All routed models now support structured output directly.
 An unknown stage falls back to `DEFAULT_MODEL` (`xiaomi/mimo-v2.5`).
 To change a stage's model, edit `STAGE_MODELS` in `routing.py` and update this table to match; the doc test enforces they agree.
 
