@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tradeloop.lib.llm.routing import model_for
+
 
 @dataclass
 class StageView:
@@ -12,6 +14,21 @@ class StageView:
     summary: str
     points: list[str] = field(default_factory=list)
     status: str = "done"
+    model: str = ""
+
+
+# raw OpenRouter slug -> friendly label shown on the card
+MODEL_LABELS: dict[str, str] = {
+    "minimax/minimax-m3": "MiniMax M3",
+    "xiaomi/mimo-v2.5": "MiMo v2.5",
+    "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+    "tencent/hy3-preview": "Tencent HY3",
+}
+
+
+def model_label(stage: str) -> str:
+    slug = model_for(stage)
+    return MODEL_LABELS.get(slug, slug)
 
 
 # stage -> (icon, friendly name, one-line "what this expert does")
@@ -195,7 +212,8 @@ def render_decision(orders_json: dict) -> StageView:
                    f"{pretty_ticker(first.get('ticker',''))} at {first.get('price','?')}.")
         points = [f"{o.get('side','BUY')} {o.get('quantity','?')} {pretty_ticker(o.get('ticker',''))} "
                   f"@ {o.get('price','?')} - {o.get('reason','')}" for o in orders]
-    return StageView(stage="41_pm_decision", icon=icon, title=title, role=role, summary=summary, points=points)
+    return StageView(stage="41_pm_decision", icon=icon, title=title, role=role,
+                     summary=summary, points=points, model=model_label("41_pm_decision"))
 
 
 _ANALYSIS_BUILDERS["30_trade_plan"] = _trade_plan
@@ -211,4 +229,5 @@ def render_stage(stage: str, raw: dict) -> StageView:
     else:
         # Task 2 fills 30/40/41; until then, and for any unknown stage, a generic card.
         summary, points = "", []
-    return StageView(stage=stage, icon=icon, title=title, role=role, summary=summary, points=points)
+    return StageView(stage=stage, icon=icon, title=title, role=role, summary=summary,
+                     points=points, model=model_label(stage))

@@ -49,6 +49,12 @@ def test_glossary_has_core_terms():
         assert term in GLOSSARY and GLOSSARY[term]
 
 
+def test_cards_carry_the_model_that_ran_them():
+    # high-stakes decision stage -> flagship model; cheap grunt stage -> flash
+    assert render_stage("22_debate", {}).model == "MiniMax M3"
+    assert render_stage("10_news", {}).model == "DeepSeek V4 Flash"
+
+
 def test_unknown_stage_returns_generic_card():
     view = render_stage("99_unknown", {"foo": "bar"})
     assert view.status == "done" and view.title
