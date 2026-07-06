@@ -95,7 +95,7 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         (run_dir / "orders.json").write_text("{not json", encoding="utf-8")
         return 0
 
@@ -119,7 +119,7 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         # One approved BUY (in universe, >= min_position_size 15000, under the
         # 25% allocation cap of the 100000 starting equity) + one non-universe reject.
         (run_dir / "orders.json").write_text(json.dumps({"orders": [

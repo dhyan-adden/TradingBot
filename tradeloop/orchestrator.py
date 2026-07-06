@@ -19,8 +19,9 @@ from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.client import LLMClient
-from tradeloop.lib.llm.schemas import PMDecision
+from tradeloop.lib.llm.schemas import PMDecision, TradePlan
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
+from tradeloop.lib.risk.sizing import apply_guardrails, position_size_from_stop
 from tradeloop.lib.util.holidays import is_nse_holiday
 from tradeloop.scripts.prepare_cycle import prepare as _prepare
 
@@ -53,7 +54,42 @@ def _today() -> date:
     return date.today()
 
 
-def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int, client=None) -> int:
+def _deterministic_qty(entry: float, hard_stop: float, settings) -> int:
+    """Authoritative share count from the risk budget + guardrails. The LLM
+    trader is reliable on thesis/entry/stop but routinely lowballs quantity: a
+    green-lit ICICI came in at 4 shares (~Rs 5.7k, 0.14% risk) against the ~17
+    the 1.5% budget permits, then got vetoed under the 15k min-position floor.
+    Sizing is a formula, not an LLM guess. Returns 0 when untradeable (can't
+    clear the min-position floor), matching the route-gate's own reject rule."""
+    raw = position_size_from_stop(
+        settings.paper_starting_inr, entry, hard_stop,
+        atr_value=0.0, per_trade_risk_pct=settings.per_trade_risk_pct)
+    return apply_guardrails(
+        raw, entry, settings.paper_starting_inr, settings.max_position_pct,
+        adv20_inr=None, min_position_size_inr=settings.min_position_size_inr)
+
+
+def _size_trade_plan(run_dir: Path, settings) -> None:
+    """Overwrite each ticket's quantity with the deterministic size and drop
+    tickets that can't clear the floor. Runs immediately after the trader stage
+    so the risk manager and PM reason about correctly-sized tickets - otherwise
+    a lowballed qty gets vetoed downstream and no good trade ever routes."""
+    path = run_dir / "30_trade_plan.json"
+    if not path.exists():
+        return
+    plan = TradePlan.model_validate_json(path.read_text(encoding="utf-8"))
+    sized = [t.model_copy(update={"quantity": q})
+             for t in plan.tickets
+             if (q := _deterministic_qty(t.entry, t.hard_stop, settings)) > 0]
+    plan = plan.model_copy(update={"tickets": sized})
+    path.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    (run_dir / "30_trade_plan.md").write_text(
+        f"# 30_trade_plan\n\n```json\n{plan.model_dump_json(indent=2)}\n```\n",
+        encoding="utf-8")
+
+
+def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
+                   client=None, settings=None) -> int:
     """Dispatch reasoning to the selected backend, then return an int exit code
     matching P0's contract: -1 on cycle-timeout (run_cycle -> TIMEOUT, exit 1),
     0 on success, nonzero on failure.
@@ -72,7 +108,7 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int, client=
     if backend == "claude":
         return _run_reasoning_claude(run_dir, mode, timeout)
     if backend == "openrouter":
-        return _run_reasoning_openrouter(run_dir, mode, timeout, client)
+        return _run_reasoning_openrouter(run_dir, mode, timeout, client, settings)
     raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
 
 
@@ -91,7 +127,8 @@ def _run_reasoning_claude(run_dir: Path, mode: str, timeout: int) -> int:
     return proc.returncode
 
 
-def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int, client=None) -> int:
+def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int,
+                              client=None, settings=None) -> int:
     """In-process OpenRouter DAG: each stage returns a validated pydantic form
     written to run_dir/<stage>.json; Python - not the LLM - then serialises
     orders.json from the validated PMDecision (route_orders_file reads the
@@ -113,6 +150,8 @@ def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int, client=Non
             return -1
         try:
             stages.run_stage(name, run_dir, client)
+            if name == "30_trade_plan" and settings is not None:
+                _size_trade_plan(run_dir, settings)  # deterministic qty, not the LLM's guess
         except Exception as exc:  # a stage that can't produce valid output must not
             # crash mid-cycle and leave a partial run that looks like a clean "hold".
             # Record it loudly and fail the cycle; run_cycle -> REASONING_FAILED.
@@ -181,7 +220,8 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             print("tradeloop_cycle=LOCKED")
             return 0
         run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
-        rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds)
+        rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds,
+                            settings=settings)
         if rc == -1:
             print("tradeloop_cycle=TIMEOUT")
             return 1

@@ -44,7 +44,7 @@ def _wire(monkeypatch, root, price, hard_stop, tag):
         _freeze_setup(run_dir)
         return run_dir
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         _orders(run_dir, price, hard_stop)
         return 0
 

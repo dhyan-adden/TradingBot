@@ -42,7 +42,7 @@ def test_known_cited_news_id_reaches_awaiting_approval(monkeypatch, tmp_path):
         _freeze_known_story(run_dir)
         return run_dir
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         _valid_orders_json(run_dir)
         (run_dir / "20_bull.json").write_text(json.dumps(
             {"evidence": ["knownid00001"]}), encoding="utf-8")
@@ -67,7 +67,7 @@ def test_phantom_cited_news_id_blocks_with_evidence_invalid(monkeypatch, tmp_pat
         _freeze_known_story(run_dir)
         return run_dir
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         _valid_orders_json(run_dir)
         (run_dir / "20_bull.json").write_text(json.dumps(
             {"evidence": ["phantomid0001"]}), encoding="utf-8")
@@ -92,7 +92,7 @@ def test_no_snapshot_on_disk_skips_check(monkeypatch, tmp_path):
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
 
-    def fake_reason(run_dir, mode, agent, timeout):
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
         _valid_orders_json(run_dir)
         (run_dir / "20_bull.json").write_text(json.dumps(
             {"evidence": ["anything0001"]}), encoding="utf-8")
