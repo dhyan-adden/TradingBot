@@ -69,6 +69,51 @@ def test_prepare_adhoc_requires_request(monkeypatch, tmp_path: Path) -> None:
         raise AssertionError("adhoc prepare should require request text")
 
 
+def test_prepare_renders_open_positions_into_context(monkeypatch, tmp_path: Path) -> None:
+    # kills a regression where 00_context always rendered an EMPTY book: agents
+    # reasoned over a flat portfolio while the ledger held open positions, so
+    # manage-mode cycles could never see (or exit) what they were holding.
+    from tradeloop.lib.broker.paper_book import append as append_book
+    from tradeloop.lib.broker.paper_broker import Fill
+
+    root = tmp_path / "tradeloop"
+    write_minimal_root(root)
+    (root / "state").mkdir()
+    append_book(
+        root / "state" / "ledger.db",
+        [Fill("PAPER-1", "HDFCBANK", "BUY", 30, 830.62, "FILLED", "CNC")],
+        hard_stops={"HDFCBANK": 807.24},
+    )
+    monkeypatch.setattr(prepare_cycle, "ROOT", root)
+    monkeypatch.setattr(prepare_cycle, "ingest_run", _stub_ingest_run)
+
+    run_dir = prepare_cycle.prepare("intraday", "")
+
+    context = (run_dir / "00_context.md").read_text(encoding="utf-8")
+    assert "HDFCBANK: quantity=30, avg_price=830.62, hard_stop=807.24" in context
+    assert "- None" not in context
+    # cash = start - notional - exchange costs (stamp/charges), so strictly
+    # below the naive figure but within a small cost band of it
+    cash = float(context.split("Cash INR: ")[1].split("\n")[0])
+    naive = 100000 - 30 * 830.62
+    assert naive - 25 < cash < naive
+
+
+def test_prepare_without_ledger_renders_empty_book(monkeypatch, tmp_path: Path) -> None:
+    # fresh deploys / hermetic roots have no state/ledger.db: prepare must fall
+    # back to the empty starting book, not crash or invent positions.
+    root = tmp_path / "tradeloop"
+    write_minimal_root(root)
+    monkeypatch.setattr(prepare_cycle, "ROOT", root)
+    monkeypatch.setattr(prepare_cycle, "ingest_run", _stub_ingest_run)
+
+    run_dir = prepare_cycle.prepare("premarket", "")
+
+    context = (run_dir / "00_context.md").read_text(encoding="utf-8")
+    assert "- None" in context
+    assert "Cash INR: 100000" in context
+
+
 def test_run_cycle_adhoc_missing_request_exits_before_codex() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = subprocess.run(

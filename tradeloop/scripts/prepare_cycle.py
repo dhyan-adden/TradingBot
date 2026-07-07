@@ -9,14 +9,38 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger
+from tradeloop.lib.broker.paper_book import hydrate
 from tradeloop.lib.data.ingest import run as ingest_run
 from tradeloop.lib.data.kite import KiteClient
 from tradeloop.lib.data.snapshot import render_news_raw, render_setups
-from tradeloop.lib.portfolio.state import empty_state_from_settings, render_context
+from tradeloop.lib.portfolio.state import PortfolioState, empty_state_from_settings, render_context
 from tradeloop.lib.util.ist_clock import IST
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _portfolio_state(base: Path) -> PortfolioState:
+    """Real book state for 00_context so cycles see and manage open positions
+    (an empty context made agents reason over a flat book while holding fills).
+    Falls back to the empty state when no ledger exists (fresh deploys, tests)."""
+    settings_path = base / "config" / "settings.yaml"
+    ledger_path = base / "state" / "ledger.db"
+    empty = empty_state_from_settings(settings_path)
+    if not ledger_path.exists():
+        return empty
+    book = hydrate(ledger_path, empty.cash_inr)
+    stops = {}
+    for event in Ledger(ledger_path).replay([ORDER_FILLED]):
+        if float(event.get("hard_stop", 0.0)) > 0:
+            stops[event["symbol"]] = float(event["hard_stop"])
+    stops = {s: v for s, v in stops.items() if book.positions.get(s, 0) > 0}
+    equity = book.cash_inr + sum(
+        q * book.avg_prices.get(s, 0.0) for s, q in book.positions.items())
+    return PortfolioState(cash_inr=book.cash_inr, positions=dict(book.positions),
+                          avg_prices=dict(book.avg_prices), hard_stops=stops,
+                          equity_inr=equity)
 
 
 def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=None) -> Path:
@@ -24,7 +48,7 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
     now = datetime.now(IST)
     run_dir = base / "runs" / f"{now:%Y-%m-%d_%H%M}_{mode}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    state = empty_state_from_settings(base / "config" / "settings.yaml")
+    state = _portfolio_state(base)
     macro_path = base / "memory" / "macro_view.md"
     macro = macro_path.read_text(encoding="utf-8") if macro_path.exists() else ""
     carry_forward_path = base / "memory" / "carry_forward_context.md"

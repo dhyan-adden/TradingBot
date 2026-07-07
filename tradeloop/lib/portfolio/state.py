@@ -10,6 +10,7 @@ class PortfolioState:
     cash_inr: float
     positions: Dict[str, int] = field(default_factory=dict)
     avg_prices: Dict[str, float] = field(default_factory=dict)
+    hard_stops: Dict[str, float] = field(default_factory=dict)
     equity_inr: float = 0.0
     daily_pnl_inr: float = 0.0
 
@@ -34,7 +35,10 @@ def render_context(state: PortfolioState, mode: str, macro: str = "") -> str:
     if not state.positions:
         lines.append("- None")
     for symbol, quantity in sorted(state.positions.items()):
-        lines.append(f"- {symbol}: quantity={quantity}, avg_price={state.avg_prices.get(symbol, 0)}")
+        line = f"- {symbol}: quantity={quantity}, avg_price={state.avg_prices.get(symbol, 0)}"
+        if state.hard_stops.get(symbol):
+            line += f", hard_stop={state.hard_stops[symbol]}"
+        lines.append(line)
     lines.extend(["", "## Macro Snapshot", macro.strip() or "No macro snapshot yet.", ""])
     return "\n".join(lines)
 
