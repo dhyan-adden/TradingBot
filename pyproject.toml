@@ -3,18 +3,16 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tradingbot"
+name = "tradeloop"
 version = "0.1.0"
-description = "Agentic paper trading harness for Indian equity swing trading"
+description = "Agent-driven, India-only, news-discovery-first paper trading loop"
 requires-python = ">=3.11"
 dependencies = [
   "httpx>=0.27",
   "pydantic>=2.7",
   "PyYAML>=6.0",
   "pandas>=2.0",
-  "yfinance>=0.2.40",
-  "feedparser>=6.0.11",
-  "langgraph>=0.2.0"
+  "feedparser>=6.0.11"
 ]
 
 [project.optional-dependencies]
@@ -22,13 +20,10 @@ dev = [
   "pytest>=8.0"
 ]
 
-[project.scripts]
-tradingbot = "tradingbot.cli:main"
-
 [tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["tradingbot*", "tradeloop*"]
+where = ["."]
+include = ["tradeloop*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tradeloop/tests"]
-pythonpath = ["src"]
+testpaths = ["tradeloop/tests"]
+pythonpath = ["."]

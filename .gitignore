@@ -7,6 +7,10 @@ state/**/*.db
 state/**/*.db-*
 **/state/*.db
 **/state/*.db-*
+# archived engine-1 runtime state (kept on disk, not in git)
+legacy/state/**/*.db
+legacy/state/**/*.db-*
+legacy/state/realtest/
 .env
 .DS_Store
 .superpowers/
