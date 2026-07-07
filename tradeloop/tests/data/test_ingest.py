@@ -41,8 +41,11 @@ def test_run_total_news_failure_is_loud_not_blank(tmp_path, monkeypatch):
 
 def test_run_symbols_optional_defaults_to_master_symbols(tmp_path, monkeypatch):
     # kills a regression against V2: symbols must be optional, defaulting to master.symbols()
+    # config_dir=tmp_path keeps this hermetic: the REAL config is source=full_nse,
+    # which would load the 2,417-symbol universe cache and pace-sleep ~14 minutes.
     monkeypatch.setattr(ingest, "_collect_news", lambda http, master, cfg: ([], []))
-    snap = ingest.run(datetime(2026, 7, 2), run_dir=tmp_path, kite_client=NoKite(), master=TM)
+    snap = ingest.run(datetime(2026, 7, 2), run_dir=tmp_path, kite_client=NoKite(), master=TM,
+                      config_dir=tmp_path)
     assert snap.run_dir == tmp_path
 
 
