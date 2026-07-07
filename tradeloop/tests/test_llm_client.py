@@ -62,6 +62,24 @@ def test_fallback_is_distinct_even_when_primary_equals_default(tmp_path, monkeyp
     assert rec["model"] == "minimax/minimax-m3"       # fell to a DIFFERENT model
 
 
+def test_hollow_empty_object_rejected_and_falls_back(tmp_path, monkeypatch):
+    # regression (live 2026-07-07): minimax-m3 returned a literal {} for
+    # 22_debate and 30_trade_plan. {} is valid JSON and validates against the
+    # all-defaults schemas, so it bypassed retry AND fallback and cascaded into
+    # a silent fake "hold" (orders=0). A hollow {} must be treated as invalid
+    # so the existing retry/fallback chain engages.
+    hollow = {"choices": [{"message": {"content": "{}"}}]}
+    ok = _load("or_ok_shortlist.json")
+    c, calls = _client(tmp_path, monkeypatch, [hollow, hollow, hollow, ok])
+    out = c.call_json("22_debate", "system", "user", Shortlist,
+                      model="minimax/minimax-m3")
+    assert isinstance(out, Shortlist)
+    assert out.candidates                             # real content, not defaults
+    assert calls["n"] == 4                            # 3 hollow primary + 1 fallback
+    rec = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[-1])
+    assert rec["model"] == "xiaomi/mimo-v2.5"         # fell to a DIFFERENT model
+
+
 def test_call_json_validates_and_records_provenance(tmp_path, monkeypatch):
     c, calls = _client(tmp_path, monkeypatch, [_load("or_ok_shortlist.json")])
     out = c.call_json("14_shortlist", "system", "user", Shortlist)

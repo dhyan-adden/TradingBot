@@ -193,6 +193,13 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     parsed = json.loads(cleaned)
     if not isinstance(parsed, dict):
         raise ValueError("model output must be a JSON object")
+    if not parsed:
+        # A literal {} carries zero information yet validates against the
+        # all-defaults stage schemas, silently cascading into a fake "hold"
+        # (observed live 2026-07-07: minimax-m3 returned {} for 22_debate and
+        # 30_trade_plan). Reject it so the retry/fallback chain engages; a
+        # legitimate empty result still names its fields ({"tickets": []}).
+        raise ValueError("model returned hollow object {}")
     return parsed
 
 
