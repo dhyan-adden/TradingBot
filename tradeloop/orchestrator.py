@@ -1,4 +1,5 @@
 """TradeLoop desk manager: gates -> lock -> prepare -> reason -> order path."""
+import dataclasses
 import fcntl
 import json
 import os
@@ -6,23 +7,28 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
-from tradeloop.lib.audit.ledger import Ledger, LedgerTamperError
+from tradeloop.lib.audit import controls, reconcile
+from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger, LedgerTamperError
+from tradeloop.lib.audit.postclose import run_postclose_learning
 from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
-from tradeloop.lib.config import load_settings
+from tradeloop.lib.config import load_settings, risk_caps
 from tradeloop.lib.data.evidence import validate_evidence
 from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
+from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.client import LLMClient
 from tradeloop.lib.llm.schemas import PMDecision, TradePlan
+from tradeloop.lib.risk.checks import RiskState
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.risk.sizing import apply_guardrails, position_size_from_stop
 from tradeloop.lib.util.holidays import is_nse_holiday
+from tradeloop.lib.util.ist_clock import IST
 from tradeloop.scripts.prepare_cycle import prepare as _prepare
 
 ROOT = Path(__file__).resolve().parent
@@ -259,6 +265,88 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         return 0
 
 
+def _now_iso() -> str:
+    return datetime.now(IST).isoformat()
+
+
+def _run_postclose_audit(run_dir: Path, root: Path, memory_root: Path,
+                         run_id: str, timestamp: str, live_ready: bool = False):
+    """Post-route accountability sweep: reconcile + controls + attribution + learning
+    over the just-approved trade plus the full ledger. Fires from route_cycle (the
+    approve phase) right after fills are persisted - in the propose/approve split that
+    is the one moment orders.json + fills.json + the fresh ledger are all consistent
+    (the plan's original 'postclose branch of run_cycle' predates the split; run_cycle
+    never routes). Observability only: it writes artifacts and updates the learning
+    memory, never routes, and the caller wraps it so it can never fail a committed route.
+
+    Two fill shapes are used deliberately: reconcile/attribution/learning consume the
+    LEDGER-fill dicts from ledger.replay([ORDER_FILLED]); controls consumes the
+    ROUTING-OUTCOME dicts route_orders_file wrote to fills.json (that shape is what
+    lets it flag a bad order recorded status=FILLED).
+
+    The control re-check evaluates each order against the PRE-route book (this run's
+    fills undone), reproducing the gate's actual pre-trade context. Re-checking against
+    the post-fill book would double-count the just-routed position in the sector/total
+    caps and falsely flag a legitimately-filled near-cap order as a gate leak (verified:
+    HDFCBANK+SBIN at ~49% Financials would each re-eval at ~73%).
+    ponytail: pre-route reconstruction is static, not incremental - a batch that
+    collectively breaches a cap while each order is individually clean (and the gate
+    rejected the later one) can still surface as a significant_deficiency; faithful
+    per-order incremental replay is the upgrade if that case ever bites."""
+    settings = load_settings(root / "config" / "settings.yaml")
+    orders = load_orders(run_dir / "orders.json")
+
+    ledger = Ledger(root / "state" / "ledger.db")
+    book = hydrate(root / "state" / "ledger.db", settings.paper_starting_inr)
+    ledger_fills = ledger.replay([ORDER_FILLED])  # {symbol,side,quantity,fill_price,status}
+
+    records = load_ticker_master(root / "config" / "universe.yaml")
+    universe = [r.symbol for r in records]
+    sectors = {r.symbol.strip().upper(): r.sector for r in records}
+    # equity basis (cash + deployed at cost) mirrors router._equity, so the control
+    # re-derivation uses the same capital the live gate did - not post-fill cash alone.
+    equity = book.cash_inr + sum(q * book.avg_prices.get(s, 0.0) for s, q in book.positions.items())
+    caps = risk_caps(settings, universe, equity)
+
+    # Pre-route book: undo THIS run's FILLED orders so each is re-evaluated against the
+    # positions the gate actually saw before it routed (no self double-count).
+    filled_syms = {str(f.get("payload", {}).get("symbol", "")).strip().upper()
+                   for f in json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
+                   if str(f.get("status", "")).upper() == "FILLED"}
+    pre_positions, pre_avg = dict(book.positions), dict(book.avg_prices)
+    for o in orders.orders:
+        sym = o.ticker.strip().upper()
+        if sym not in filled_syms:
+            continue
+        pre_positions[sym] = pre_positions.get(sym, 0) - (int(o.quantity) if o.side.upper() == "BUY" else -int(o.quantity))
+        if pre_positions[sym] <= 0:
+            pre_positions.pop(sym, None)
+            pre_avg.pop(sym, None)
+    state = RiskState(
+        cash_inr=book.cash_inr, positions=pre_positions, avg_prices=pre_avg,
+        sectors={**{s: sectors.get(s, "") for s in pre_positions},
+                 **{o.ticker.strip().upper(): sectors.get(o.ticker.strip().upper(), "") for o in orders.orders}})
+
+    # 1) reconcile positions across independent derivations (ledger-fill shape)
+    deltas = reconcile.compare(book, ledger, kite_holdings=None, orders=orders)
+    (run_dir / "40_reconcile.md").write_text(
+        "# Reconciliation\n\n" + ("\n".join(
+            f"- {d.symbol}: {d.field} {d.source_a}={d.value_a} vs {d.source_b}={d.value_b}"
+            for d in deltas) or "- clean: all sources agree\n"),
+        encoding="utf-8")
+
+    # 2) controls: re-run the gate over the routing outcomes (fills.json shape)
+    routed_fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
+    report = controls.recheck(orders, routed_fills, caps, state)
+    (run_dir / "controls.json").write_text(
+        json.dumps(dataclasses.asdict(report), indent=2), encoding="utf-8")
+
+    # 3) learning loop: journal + dossiers + strategy_performance.md (Python-owned;
+    #    it computes attribution internally over the ledger fills)
+    return run_postclose_learning(run_dir, memory_root, ledger_fills,
+                                  run_id=run_id, timestamp=timestamp, live_ready=live_ready)
+
+
 def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
     """Approval phase: review run_dir/orders.json first - invoking this routes it.
     Re-checks the safety gates (time has passed since propose), sends every order
@@ -314,6 +402,18 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
             append_book(book_path, new_fills, hard_stops=stops)
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
+        # Post-route accountability sweep (P4). Observability only, over the fills just
+        # committed to the ledger - it must NEVER turn a good route into a failure, so a
+        # throwing audit is recorded and the route still reports OK.
+        try:
+            # live_ready=False: the renderer must NOT stamp the manual "live_ready: true"
+            # override from the gate's own result - that latches the gate permanently open
+            # (the literal short-circuits live_promotion_ready). Promotion rides the earned
+            # metric lines the render writes; the literal stays a human-only force switch.
+            _run_postclose_audit(run_dir, root=root, memory_root=root / "memory",
+                                 run_id=run_dir.name, timestamp=_now_iso(), live_ready=False)
+        except Exception as exc:
+            (run_dir / "audit_error.txt").write_text(f"postclose audit failed: {exc}\n", encoding="utf-8")
         print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected}")
         return 0
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import argparse
+import importlib
+import json as _json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -38,11 +40,54 @@ def verify(mode: str, check_live_readiness: bool = False) -> int:
     return 0
 
 
+def check_imports() -> list:
+    missing = []
+    for module in ("yaml", "pandas", "pydantic"):
+        try:
+            importlib.import_module(module)
+        except Exception:
+            missing.append(module)
+    return missing
+
+
+def source_health(root: Path, max_age_hours: float = 26.0) -> list:
+    report = root / "reports" / "source_health.json"
+    if not report.exists():
+        return ["_no_source_health_report_"]
+    data = _json.loads(report.read_text(encoding="utf-8")) or {}
+    now = datetime.now(timezone.utc)
+    stale = []
+    for source, last_success in data.items():
+        try:
+            ts = datetime.fromisoformat(str(last_success))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except ValueError:
+            stale.append(source)
+            continue
+        if (now - ts).total_seconds() > max_age_hours * 3600:
+            stale.append(source)
+    return stale
+
+
+def health(root: Path) -> int:
+    missing = check_imports()
+    stale = source_health(root)
+    if missing or stale:
+        print(f"tradeloop_health=FAIL reason=imports:{','.join(missing) or '-'} sources:{','.join(stale) or '-'}")
+        return 3
+    print("tradeloop_health=OK")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="premarket", choices=["premarket", "intraday", "postclose", "adhoc"])
     parser.add_argument("--check-live-readiness", action="store_true")
+    parser.add_argument("--health", action="store_true")
     args = parser.parse_args()
+    if args.health:
+        return health(ROOT)
     return verify(args.mode, args.check_live_readiness)
 
 

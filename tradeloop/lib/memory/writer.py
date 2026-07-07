@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 
@@ -12,6 +13,12 @@ def append_unique(path: Path, heading: str, body: str) -> bool:
             handle.write(f"# {path.stem.replace('_', ' ').title()}\n")
         handle.write(entry)
     return True
+
+
+def append_provenanced(path: Path, heading: str, body: str, run_id: str, timestamp: str) -> bool:
+    digest = hashlib.sha256(body.strip().encode("utf-8")).hexdigest()[:12]
+    stamped = "\n".join([f"_run_id: {run_id} · {timestamp} · hash: {digest}_", "", body.strip()])
+    return append_unique(path, heading, stamped)
 
 
 def append_trade_journal(memory_root: Path, heading: str, body: str) -> bool:

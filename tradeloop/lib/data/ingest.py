@@ -27,6 +27,29 @@ NEWS_WEIGHT = 2.0
 _NSE_WARMUP = ("www.nseindia.com", "www.bseindia.com", "nsearchives.nseindia.com")
 
 
+def _write_source_health(root: Path, sources: set, as_of) -> None:
+    """Best-effort: stamp each source that produced items this cycle with as_of,
+    MERGING over prior successes so a source that fails today keeps its last-good
+    timestamp and only ages to 'stale' after the health check's max_age window.
+    A source that returns 0 items (down OR genuinely quiet) is not re-stamped -
+    a known limitation (success == produced items)."""
+    path = Path(root) / "reports" / "source_health.json"
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if not isinstance(existing, dict):
+            existing = {}
+    except (ValueError, OSError):
+        existing = {}
+    stamp = as_of.isoformat()
+    for src in sources:
+        existing[src] = stamp
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing, indent=2, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _collect_news(http: Http, master: TickerMaster, cfg: dict) -> Tuple[List[RawItem], List[RawItem]]:
     """Sequential, throttled fetch across all four source families. Returns (all_items, macro_items)."""
     items: List[RawItem] = []
@@ -45,7 +68,8 @@ def _collect_news(http: Http, master: TickerMaster, cfg: dict) -> Tuple[List[Raw
 def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 2500,
         run_dir: Path = None, *, http=None, kite_client=None,
         master: "TickerMaster | None" = None, config_dir: Path = Path("tradeloop/config"),
-        max_setups_downstream: "int | None" = None) -> Snapshot:
+        max_setups_downstream: "int | None" = None,
+        source_health_root: "Path | None" = None) -> Snapshot:
     assert run_dir is not None, "ingest.run requires run_dir"
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -65,6 +89,8 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
              else int(uni.get("max_setups_downstream", 25)))
 
     all_items, macro = _collect_news(http, master, cfg)
+    if source_health_root is not None:
+        _write_source_health(source_health_root, {i.source for i in all_items}, as_of)
     news_available = bool(all_items)
     stories = extract(all_items, master)  # word-boundary tagging (+ news_id already minted)
 
