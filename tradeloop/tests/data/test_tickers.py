@@ -1,5 +1,5 @@
 from tradeloop.lib.data.ticker_master import load_master
-from tradeloop.lib.data.tickers import extract, TaggedStory
+from tradeloop.lib.data.tickers import extract
 from tradeloop.lib.data.sources import RawItem
 from pathlib import Path
 

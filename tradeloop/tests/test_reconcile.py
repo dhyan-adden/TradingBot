@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 from tradeloop.lib.audit.reconcile import (
-    Delta,
     Position,
     compare,
     positions_from_fills,

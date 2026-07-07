@@ -1,4 +1,4 @@
-from tradeloop.lib.audit.controls import ControlReport, Deficiency, recheck
+from tradeloop.lib.audit.controls import ControlReport, recheck
 from tradeloop.lib.broker.orders_schema import Order, OrdersFile
 from tradeloop.lib.risk.checks import RiskCaps, RiskState
 

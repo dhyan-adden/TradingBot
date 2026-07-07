@@ -1,4 +1,3 @@
-import json
 
 from tradeloop.lib.audit.postclose import LearningResult, run_postclose_learning
 from tradeloop.lib.broker.orders_schema import Order, OrdersFile

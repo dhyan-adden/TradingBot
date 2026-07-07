@@ -112,4 +112,3 @@ def scan_universe(symbols: Iterable[str], kite_client, as_of: date, max_fetch: i
     return scans
 
 
-from tradeloop.lib.data.snapshot import render_setups  # noqa: E402  backward-compat re-export

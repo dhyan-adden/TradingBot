@@ -93,10 +93,3 @@ class PaperBroker:
     def _order_id(self, symbol: str) -> str:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"PAPER-{stamp}-{symbol}-{len(self.fills) + 1:04d}"
-
-
-def portfolio_value(broker: PaperBroker, marks: Dict[str, float]) -> float:
-    value = broker.cash_inr
-    for symbol, quantity in broker.positions.items():
-        value += quantity * float(marks.get(symbol, broker.avg_prices.get(symbol, 0.0)))
-    return round(value, 2)

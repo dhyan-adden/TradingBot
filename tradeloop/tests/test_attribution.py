@@ -1,6 +1,4 @@
 from tradeloop.lib.audit.attribution import (
-    StrategyPerformance,
-    TradeAttribution,
     expected_r,
     render_strategy_performance,
     report,

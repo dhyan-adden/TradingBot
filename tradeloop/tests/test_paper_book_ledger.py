@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from tradeloop.lib.broker import paper_book
 from tradeloop.lib.broker.paper_broker import Fill, PaperBroker

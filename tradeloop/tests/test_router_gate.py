@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from tradeloop.lib.broker.orders_schema import OrdersFile, Order
 from tradeloop.lib.broker.paper_book import append, hydrate
 from tradeloop.lib.broker.paper_broker import OrderTicket, PaperBroker
 from tradeloop.lib.broker.router import route_orders_file

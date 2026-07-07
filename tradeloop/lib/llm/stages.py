@@ -4,7 +4,6 @@ both the validated .json and a human-readable .md artifact into the run dir.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Protocol
 
