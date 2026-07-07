@@ -20,7 +20,7 @@ def test_load_settings_and_risk_caps_mapping() -> None:
     assert settings.max_open_positions == 4
     assert settings.max_position_pct == 25
     assert settings.max_total_deployed_pct == 90
-    assert settings.max_sector_pct == 40
+    assert settings.max_sector_pct == 50  # raised 2026-07-07: user-approved two-bank entry
     assert settings.daily_drawdown_pct == 3
     assert settings.promotion_gates["min_paper_trades"] == 40
     assert settings.cycle_timeout_seconds == 1200
@@ -30,7 +30,7 @@ def test_load_settings_and_risk_caps_mapping() -> None:
     assert caps.max_open_positions == 4
     assert caps.max_position_allocation_pct == 25
     assert caps.max_total_deployed_pct == 90
-    assert caps.max_sector_allocation_pct == 40
+    assert caps.max_sector_allocation_pct == 50
     assert caps.max_daily_drawdown_pct == 3
     assert caps.max_open_risk_pct == 4.0
     assert caps.min_position_size_inr == 15000
