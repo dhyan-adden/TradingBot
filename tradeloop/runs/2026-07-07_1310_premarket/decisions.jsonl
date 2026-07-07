@@ -1,0 +1,2 @@
+{"ticker": "HDFCBANK", "side": "BUY", "quantity": 30, "price": 830.2, "approved": true, "reasons": [], "routed_status": "FILLED", "routed_mode": "paper"}
+{"ticker": "SBIN", "side": "BUY", "quantity": 23, "price": 1041.9, "approved": true, "reasons": [], "routed_status": "FILLED", "routed_mode": "paper"}

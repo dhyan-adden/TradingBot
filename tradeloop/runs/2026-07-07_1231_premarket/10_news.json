@@ -1,0 +1,33 @@
+{
+  "evidence": [
+    "ff292b18b39c",
+    "2b62fa1f8afa",
+    "5607d503a2eb"
+  ],
+  "macro_context": "Euro zone inflation risks persist despite oil price retreat (ECB's Schnabel). INR strengthens: rupee opens 15 paise higher at 95.28/USD, then 7 paise higher at 95.33. Gold/silver decline ahead of US Fed June meeting minutes.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "fb6b6bcabdb1"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "ICICI Securities maintains Buy with target ₹1,850; Q1 business update shows double-digit loan/deposit growth, strongest in five years.",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "catalyst": "KR Choksey recommends Accumulate with target ₹1,531; IT earnings season begins with muted expectations but AI rout has pressured valuations.",
+      "tier": "B"
+    }
+  ],
+  "macro_themes": [
+    "Global inflation persistence vs oil retreat",
+    "INR strength against USD",
+    "Gold/silver decline ahead of Fed minutes",
+    "IT sector Q1 earnings season with muted expectations"
+  ]
+}

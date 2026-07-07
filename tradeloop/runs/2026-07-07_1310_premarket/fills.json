@@ -1,0 +1,30 @@
+[
+  {
+    "mode": "paper",
+    "status": "FILLED",
+    "payload": {
+      "order_id": "PAPER-20260707084131-HDFCBANK-0001",
+      "symbol": "HDFCBANK",
+      "side": "BUY",
+      "quantity": 30,
+      "fill_price": 830.62,
+      "status": "FILLED",
+      "product": "CNC",
+      "reason": ""
+    }
+  },
+  {
+    "mode": "paper",
+    "status": "FILLED",
+    "payload": {
+      "order_id": "PAPER-20260707084131-SBIN-0002",
+      "symbol": "SBIN",
+      "side": "BUY",
+      "quantity": 23,
+      "fill_price": 1042.42,
+      "status": "FILLED",
+      "product": "CNC",
+      "reason": ""
+    }
+  }
+]
