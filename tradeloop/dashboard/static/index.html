@@ -15,6 +15,18 @@
   .decision { border-color: #2b7; background: #f3fbf6; }
   .waiting { color: #999; font-style: italic; }
   #bar { display: flex; gap: 10px; align-items: center; }
+  h2 { font-size: 18px; margin: 22px 0 8px; }
+  .tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+  .tile { border: 1px solid #e2e2e2; border-radius: 10px; padding: 10px 14px; flex: 1 1 120px; }
+  .tile .label { color: #666; font-size: 12px; }
+  .tile .value { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 14px; }
+  th { color: #666; font-weight: 600; text-align: left; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .gain { color: #1a7f4b; } .loss { color: #b3362c; }
+  .pricenote { color: #888; font-size: 12px; }
+  .side { font-size: 12px; border-radius: 6px; padding: 1px 7px; background: #eef1f5; }
 </style>
 <h1>TradeLoop - what the bot is thinking</h1>
 <div id="bar">
@@ -22,6 +34,12 @@
   <select id="picker"></select>
   <span id="status"></span>
 </div>
+<h2>Portfolio</h2>
+<div class="tiles" id="tiles"></div>
+<div id="holdings"></div>
+<h2>Transactions</h2>
+<div id="transactions"></div>
+<h2>Latest run</h2>
 <div id="cards"></div>
 <script>
 let current = null, timer = null;
@@ -80,6 +98,64 @@ function escapeHtml(t) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+const inr = n => n == null ? '-' : '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const pnl = (n, pct) => {
+  if (n == null) return '-';
+  const cls = n >= 0 ? 'gain' : 'loss', sign = n >= 0 ? '+' : '-';
+  const tail = pct == null ? '' : ' (' + sign + Math.abs(pct).toFixed(2) + '%)';
+  return '<span class="' + cls + '">' + sign + inr(Math.abs(n)) + tail + '</span>';
+};
+const pct = n => n == null ? '-'
+  : '<span class="' + (n >= 0 ? 'gain' : 'loss') + '">' + (n >= 0 ? '+' : '-') + Math.abs(n).toFixed(2) + '%</span>';
+const ist = ts => ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' IST' : '-';
+
+function tile(label, value) {
+  return '<div class="tile"><div class="label">' + escapeHtml(label) + '</div>'
+    + '<div class="value">' + value + '</div></div>';
+}
+
+async function loadPortfolio() {
+  const p = await fetch('/api/portfolio').then(x => x.json()).catch(() => null);
+  if (!p) return;
+  document.getElementById('tiles').innerHTML =
+    tile('Equity', inr(p.equity_inr))
+    + tile('Cash', inr(p.cash_inr))
+    + tile('Invested', inr(p.invested_inr))
+    + tile('Unrealized P&L', pnl(p.unrealized_pnl_inr))
+    + tile('Realized P&L', pnl(p.realized_pnl_inr))
+    + tile('Return', pct(p.return_pct));
+  const note = p.prices_live ? '' : '<p class="pricenote">Live prices unavailable (Zerodha session expired?) - showing book values at buy price.</p>';
+  if (!p.holdings.length) {
+    document.getElementById('holdings').innerHTML = '<p class="pricenote">No open positions.</p>';
+  } else {
+    document.getElementById('holdings').innerHTML = note
+      + '<table><tr><th>Stock</th><th class="num">Qty</th><th class="num">Avg buy</th><th class="num">Now</th>'
+      + '<th class="num">Value</th><th class="num">P&L</th><th class="num">Stop</th><th class="num">To stop</th></tr>'
+      + p.holdings.map(h => '<tr><td>' + escapeHtml(h.symbol) + '</td>'
+        + '<td class="num">' + h.quantity + '</td>'
+        + '<td class="num">' + inr(h.avg_price) + '</td>'
+        + '<td class="num">' + inr(h.ltp) + '</td>'
+        + '<td class="num">' + inr(h.market_value_inr) + '</td>'
+        + '<td class="num">' + pnl(h.unrealized_pnl_inr, h.unrealized_pct) + '</td>'
+        + '<td class="num">' + inr(h.hard_stop) + '</td>'
+        + '<td class="num">' + (h.stop_distance_pct == null ? '-' : h.stop_distance_pct.toFixed(2) + '%') + '</td></tr>').join('')
+      + '</table>';
+  }
+  document.getElementById('transactions').innerHTML = !p.transactions.length
+    ? '<p class="pricenote">No transactions yet.</p>'
+    : '<table><tr><th>When</th><th>Side</th><th>Stock</th><th class="num">Qty</th>'
+      + '<th class="num">Price</th><th class="num">Value</th><th class="num">Costs</th><th class="num">Realized P&L</th></tr>'
+      + p.transactions.map(t => '<tr><td>' + ist(t.ts) + '</td>'
+        + '<td><span class="side">' + escapeHtml(t.side) + '</span></td>'
+        + '<td>' + escapeHtml(t.symbol) + '</td>'
+        + '<td class="num">' + t.quantity + '</td>'
+        + '<td class="num">' + inr(t.price) + '</td>'
+        + '<td class="num">' + inr(t.value_inr) + '</td>'
+        + '<td class="num">' + inr(t.costs_inr) + '</td>'
+        + '<td class="num">' + pnl(t.realized_pnl_inr) + '</td></tr>').join('')
+      + '</table>';
+}
+
 document.getElementById('picker').addEventListener('change', e => selectRun(e.target.value));
 document.getElementById('runNow').addEventListener('click', async () => {
   document.getElementById('status').textContent = 'starting run...';
@@ -89,4 +165,5 @@ document.getElementById('runNow').addEventListener('click', async () => {
 });
 
 loadRuns();
+loadPortfolio();
 </script>

@@ -9,7 +9,23 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+from tradeloop.dashboard.portfolio import portfolio_view
 from tradeloop.dashboard.runs import list_runs, read_run
+
+
+def _live_prices(symbols):
+    # Lazy import so the dashboard stays usable with no Kite auth; the shared
+    # module-level client keeps one MCP subprocess across requests.
+    from tradeloop.lib.data.kite import ltp
+    return ltp(symbols)
+
+
+def _starting_cash(root: Path) -> float:
+    try:
+        from tradeloop.lib.config import load_settings
+        return float(load_settings(root / "config" / "settings.yaml").paper_starting_inr)
+    except Exception:
+        return 100000.0
 
 
 def launch_propose(repo_root: Path, python: str = sys.executable, launcher=subprocess.Popen) -> str:
@@ -33,7 +49,7 @@ def _safe_run_dir(runs_dir: Path, name: str) -> Path | None:
     return candidate
 
 
-def handle_api(path: str, query: dict, runs_dir: Path) -> tuple[int, dict]:
+def handle_api(path: str, query: dict, runs_dir: Path, price_fn=_live_prices) -> tuple[int, dict]:
     runs_dir = Path(runs_dir)
     if path == "/api/runs":
         return 200, {"runs": [asdict(r) for r in list_runs(runs_dir)]}
@@ -43,6 +59,10 @@ def handle_api(path: str, query: dict, runs_dir: Path) -> tuple[int, dict]:
         if d is None:
             return 400, {"error": "bad run dir"}
         return 200, read_run(d)
+    if path == "/api/portfolio":
+        root = runs_dir.parent  # tradeloop/runs -> tradeloop
+        return 200, portfolio_view(root / "state" / "ledger.db",
+                                   _starting_cash(root), price_fn=price_fn)
     return 404, {"error": "not found"}
 
 
