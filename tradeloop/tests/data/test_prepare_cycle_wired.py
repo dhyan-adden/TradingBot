@@ -7,7 +7,7 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
     # kills a regression where prepare_cycle keeps writing the empty NewsExtraction()/[] renderers
     called = {}
 
-    def fake_run(as_of, run_dir, config_dir, kite_client=None):
+    def fake_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
         called["run_dir"] = Path(run_dir)
         called["config_dir"] = Path(config_dir)
         called["kite_client"] = kite_client
@@ -32,7 +32,7 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
 
 def test_prepare_degrades_not_aborts_on_ingest_failure(monkeypatch, tmp_path):
     # kills a regression where an ingest exception crashes the cycle instead of degrading loudly
-    def boom_run(as_of, run_dir, config_dir, kite_client=None):
+    def boom_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
         raise RuntimeError("all sources down")
 
     (tmp_path / "config").mkdir()
@@ -53,7 +53,7 @@ def _hermetic(monkeypatch, tmp_path, captured):
     (tmp_path / "memory").mkdir()
     (tmp_path / "config" / "settings.yaml").write_text("capital:\n  paper_starting_inr: 100000\n")
 
-    def fake_run(as_of, run_dir, config_dir, kite_client=None):
+    def fake_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
         captured["kite_client"] = kite_client
         from tradeloop.lib.data.snapshot import Snapshot
         return Snapshot(run_dir=Path(run_dir), snapshot_hash="h", news_ids=set(), news_available=False)

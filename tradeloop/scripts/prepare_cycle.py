@@ -73,7 +73,8 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
     if kite_client is None and os.getenv("ZERODHA_ENABLE_DATA", "false").strip().lower() == "true":
         kite_client = KiteClient()
     try:
-        ingest_run(now, run_dir=run_dir, config_dir=base / "config", kite_client=kite_client)
+        ingest_run(now, run_dir=run_dir, config_dir=base / "config", kite_client=kite_client,
+                   source_health_root=base)
     except Exception as exc:  # degrade-not-abort: never leave a silent blank
         (run_dir / "01_news_raw.md").write_text(
             render_news_raw([], [], news_available=False), encoding="utf-8")
