@@ -11,6 +11,7 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
         called["run_dir"] = Path(run_dir)
         called["config_dir"] = Path(config_dir)
         called["kite_client"] = kite_client
+        called["source_health_root"] = source_health_root
         (Path(run_dir) / "01_news_raw.md").write_text("# Raw News\n\n### RELIANCE\n- [nid] hit\n")
         (Path(run_dir) / "02_setups_raw.md").write_text("# Raw Technical Setups\n")
         from tradeloop.lib.data.snapshot import Snapshot
@@ -28,6 +29,9 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
     assert "RELIANCE" in (run_dir / "01_news_raw.md").read_text()
     assert called["run_dir"] == run_dir
     assert called["config_dir"] == tmp_path / "config"
+    # wiring guard: prepare MUST pass source_health_root=base, else the health check's
+    # source_health.json is never written and the deploy check goes permanently red.
+    assert called["source_health_root"] == tmp_path
 
 
 def test_prepare_degrades_not_aborts_on_ingest_failure(monkeypatch, tmp_path):

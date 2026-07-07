@@ -51,7 +51,9 @@ def _round_trips(fills: List[dict]) -> Dict[str, dict]:
     """Return {symbol: {entry_vwap, exit_vwap}} for symbols fully closed."""
     agg: Dict[str, dict] = {}
     for f in fills:
-        if str(f.get("status", "")).upper() != "FILLED":
+        # Ledger ORDER_FILLED events carry no "status" key; default FILLED so real
+        # replayed fills are attributed (else paper_trades stays 0 forever).
+        if str(f.get("status", "FILLED")).upper() != "FILLED":
             continue
         symbol = str(f["symbol"]).strip().upper()
         side = str(f["side"]).upper()

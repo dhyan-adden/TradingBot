@@ -406,9 +406,12 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         # committed to the ledger - it must NEVER turn a good route into a failure, so a
         # throwing audit is recorded and the route still reports OK.
         try:
+            # live_ready=False: the renderer must NOT stamp the manual "live_ready: true"
+            # override from the gate's own result - that latches the gate permanently open
+            # (the literal short-circuits live_promotion_ready). Promotion rides the earned
+            # metric lines the render writes; the literal stays a human-only force switch.
             _run_postclose_audit(run_dir, root=root, memory_root=root / "memory",
-                                 run_id=run_dir.name, timestamp=_now_iso(),
-                                 live_ready=live_promotion_ready(root, settings))
+                                 run_id=run_dir.name, timestamp=_now_iso(), live_ready=False)
         except Exception as exc:
             (run_dir / "audit_error.txt").write_text(f"postclose audit failed: {exc}\n", encoding="utf-8")
         print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected}")

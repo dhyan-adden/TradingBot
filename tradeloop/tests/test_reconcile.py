@@ -40,6 +40,26 @@ def test_fills_replay_derives_vwap_and_net_qty():
     assert pos["TCS"] == Position(qty=15, avg_price=110.0)
 
 
+def test_real_ledger_fills_have_no_status_key_and_reconcile_clean(tmp_path):
+    # Regression (final-review Critical): real ORDER_FILLED events written by
+    # paper_book.append carry NO "status" key (project_positions hardcodes FILLED).
+    # A status filter defaulting to "" silently dropped every real fill -> a false
+    # reconcile break on every cycle and permanently-zero attribution. This drives
+    # the REAL ledger append path, not synthetic status-bearing dicts.
+    from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger
+    from tradeloop.lib.broker.paper_book import append as append_book
+    from tradeloop.lib.broker.paper_broker import Fill
+
+    db = tmp_path / "ledger.db"
+    append_book(db, [Fill("PAPER-1", "TCS", "BUY", 15, 110.0, "FILLED", "CNC")])
+    led = Ledger(db)
+    fills = led.replay([ORDER_FILLED])
+    assert fills and "status" not in fills[0]           # real events lack the key
+    assert positions_from_fills(fills) == {"TCS": Position(qty=15, avg_price=110.0)}
+    # book derives from the same ledger, so reconcile must be clean - not a false break
+    assert compare(led.project_positions(100000.0), led, kite_holdings=None, orders=None) == []
+
+
 def test_orders_intent_minus_rejects():
     of = OrdersFile(
         mode="premarket",
@@ -55,6 +75,17 @@ def test_orders_intent_minus_rejects():
 def test_kite_holdings_mapped():
     holdings = [{"tradingsymbol": "TCS", "quantity": 15, "average_price": 110.0}]
     assert positions_from_kite(holdings)["TCS"] == Position(qty=15, avg_price=110.0)
+
+
+def test_compare_flags_book_vs_kite_holdings_mismatch():
+    # the kite-holdings branch of compare() was untested: a broker/broker-live drift
+    # (book says 15, Kite says 12) must surface as a qty delta.
+    fills = [_fill("TCS", "BUY", 15, 110.0)]
+    broker = FakeBroker(cash_inr=100000.0, positions={"TCS": 15}, avg_prices={"TCS": 110.0})
+    holdings = [{"tradingsymbol": "TCS", "quantity": 12, "average_price": 110.0}]
+    deltas = compare(broker, FakeLedger(fills), kite_holdings=holdings, orders=None)
+    assert any(d.field == "qty" and d.source_b == "kite_holdings"
+               and d.value_a == 15 and d.value_b == 12 for d in deltas)
 
 
 def test_compare_flags_qty_mismatch_between_fills_and_orders():

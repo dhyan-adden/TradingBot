@@ -43,7 +43,10 @@ def _apply(book: Dict[str, Position], symbol: str, side: str, qty: int, price: f
 def positions_from_fills(fills: List[dict]) -> Dict[str, Position]:
     book: Dict[str, Position] = {}
     for f in fills:
-        if str(f.get("status", "")).upper() != "FILLED":
+        # Real ledger ORDER_FILLED events carry no "status" key (project_positions
+        # hardcodes FILLED); only synthetic/routing dicts do. Default FILLED so
+        # replayed fills are not silently dropped.
+        if str(f.get("status", "FILLED")).upper() != "FILLED":
             continue
         _apply(book, str(f["symbol"]), str(f["side"]), int(f["quantity"]), float(f["fill_price"]))
     return book
@@ -73,7 +76,7 @@ def _cash_from_fills(fills: List[dict], starting_cash: float) -> float:
     book uses (brokerage/STT/stamp/GST/DP) - not gross value alone."""
     cash = starting_cash
     for f in fills:
-        if str(f.get("status", "")).upper() != "FILLED":
+        if str(f.get("status", "FILLED")).upper() != "FILLED":  # ledger fills carry no status key
             continue
         side = str(f["side"]).upper()
         quantity = int(f["quantity"])
