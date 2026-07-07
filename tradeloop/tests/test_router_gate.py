@@ -94,6 +94,43 @@ def test_routes_orders_and_skips_held(tmp_path: Path) -> None:
     assert len(decisions) == 1
 
 
+def test_postclose_blocks_all_orders(tmp_path: Path) -> None:
+    # postclose = no trading: a proposed BUY must not route (regresses the 2026-07-07
+    # bug where the mode-blind DAG proposed 3 postclose BUYs).
+    orders, fills = _write(tmp_path, {"orders": [
+        {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000}]})
+    routed = route_orders_file(orders, fills, PaperBroker(500000), SETTINGS, root=ROOT,
+                               mode="postclose")
+    assert routed[0].status == "MODE_DISALLOWED"
+    written = json.loads(fills.read_text(encoding="utf-8"))
+    assert written[0]["status"] == "MODE_DISALLOWED"
+
+
+def test_intraday_blocks_new_buy_allows_sell_exit(tmp_path: Path) -> None:
+    # intraday = manage existing longs only: new BUY entry blocked, SELL exit routes.
+    book = tmp_path / "state" / "paper_book.jsonl"
+    seed = PaperBroker(cash_inr=1_000_000, slippage_bps=0)
+    append(book, [seed.place_order(OrderTicket("RELIANCE", "BUY", 5, 1000))])
+    broker = hydrate(book, starting_cash_inr=1_000_000)
+    orders, fills = _write(tmp_path, {"orders": [
+        {"ticker": "TCS", "side": "BUY", "quantity": 5, "price": 3000},
+        {"ticker": "RELIANCE", "side": "SELL", "quantity": 2, "price": 1050}]})
+    routed = route_orders_file(orders, fills, broker, SETTINGS, root=ROOT, mode="intraday")
+    by_symbol = {r.payload.get("symbol"): r.status for r in routed}
+    assert by_symbol["TCS"] == "MODE_DISALLOWED"
+    assert by_symbol["RELIANCE"] == "FILLED"
+    assert broker.positions == {"RELIANCE": 3}
+
+
+def test_premarket_allows_new_buy(tmp_path: Path) -> None:
+    # explicit mode="premarket" preserves the pre-gate happy path.
+    orders, fills = _write(tmp_path, {"orders": [
+        {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000}]})
+    routed = route_orders_file(orders, fills, PaperBroker(500000), SETTINGS, root=ROOT,
+                               mode="premarket")
+    assert routed[0].status == "FILLED"
+
+
 def test_malformed_orders_file_raises(tmp_path: Path) -> None:
     bad = tmp_path / "orders.json"
     bad.write_text("{not json", encoding="utf-8")

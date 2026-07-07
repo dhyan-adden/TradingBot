@@ -12,8 +12,27 @@ from tradeloop.lib.broker.zerodha_mcp import to_zerodha_payload
 from tradeloop.lib.config import Settings
 from tradeloop.lib.config import risk_caps as risk_caps_from
 from tradeloop.lib.data.ticker_master import load_ticker_master
-from tradeloop.lib.risk.checks import RiskState, evaluate
+from tradeloop.lib.risk.checks import RiskDecision, RiskState, evaluate
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
+
+
+# Cycle-mode trading policy (00_master_orchestrator.md lines 45-47): premarket/adhoc
+# may open new longs; intraday manages existing longs only (exits, no new entries);
+# postclose never trades. Enforced deterministically at the route gate below so the
+# contract holds regardless of which backend or human authored orders.json - the LLM
+# proposing an out-of-mode order can no longer route it.
+_MODE_ALLOWED_SIDES: Dict[str, set] = {
+    "premarket": {"BUY", "SELL"},
+    "adhoc": {"BUY", "SELL"},
+    "intraday": {"SELL"},
+    "postclose": set(),
+}
+
+
+def _sides_for_mode(mode: str) -> set:
+    # Unknown mode -> permissive (premarket semantics), preserving the pre-gate
+    # behaviour for direct callers/tests that pass no mode.
+    return _MODE_ALLOWED_SIDES.get(str(mode).strip().lower(), {"BUY", "SELL"})
 
 
 @dataclass(frozen=True)
@@ -106,6 +125,7 @@ def route_orders_file(
     settings: Settings,
     root: Path = Path("tradeloop"),
     ledger: "Ledger | None" = None,
+    mode: str = "premarket",
 ) -> list[RoutedOrder]:
     of = load_orders(orders_path)  # typed; raises on malformed -> cycle aborts loudly
     records = load_ticker_master(root / "config" / "universe.yaml")
@@ -113,16 +133,26 @@ def route_orders_file(
     sectors = {r.symbol.upper(): r.sector for r in records}
     caps = risk_caps_from(settings, symbols, _equity(book))
     state = _risk_state(book, sectors)
+    allowed_sides = _sides_for_mode(mode)
     decisions_path = orders_path.parent / "decisions.jsonl"
     routed: list[RoutedOrder] = []
     for order in of.orders:  # held[] intentionally skipped in Phase 0
         ticket = to_ticket(order)
-        verdict = evaluate(ticket, state, caps)  # the mandatory gate
-        if not verdict.approved:
-            outcome = RoutedOrder("blocked", "RISK_REJECTED",
-                                  {"symbol": ticket.symbol, "reasons": verdict.reasons})
+        if ticket.side.strip().upper() not in allowed_sides:
+            # Out-of-mode order (e.g. a BUY in intraday/postclose): block before the
+            # risk gate so a wrong-cycle new entry can never fill. Recorded like any
+            # other rejection for the audit trail.
+            verdict = RiskDecision(approved=False,
+                                   reasons=[f"mode_{mode}_disallows_{order.side}"])
+            outcome = RoutedOrder("blocked", "MODE_DISALLOWED",
+                                  {"symbol": ticket.symbol, "side": ticket.side, "mode": mode})
         else:
-            outcome = route_order(ticket, book, root=root)
+            verdict = evaluate(ticket, state, caps)  # the mandatory gate
+            if not verdict.approved:
+                outcome = RoutedOrder("blocked", "RISK_REJECTED",
+                                      {"symbol": ticket.symbol, "reasons": verdict.reasons})
+            else:
+                outcome = route_order(ticket, book, root=root)
         routed.append(outcome)
         append_decision(decisions_path, order, verdict, outcome)
         if ledger is not None:

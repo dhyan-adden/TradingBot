@@ -33,6 +33,14 @@ from tradeloop.scripts.prepare_cycle import prepare as _prepare
 
 ROOT = Path(__file__).resolve().parent
 
+# Order-producing stages and the modes allowed to run them. intraday (manage-only)
+# and postclose (no trading) skip these: the trader is a long-only NEW-ENTRY
+# discovery engine with no exit logic, so it could only emit forbidden new entries.
+# Skipping yields orders=[] with no wasted model calls; router._sides_for_mode is the
+# hard enforcement at route time.
+_TRADE_STAGES = {"30_trade_plan", "40_risk_report", "41_pm_decision"}
+_ORDER_MODES = {"premarket", "adhoc"}
+
 
 def _gate_holiday(today: date) -> str | None:
     return "nse_holiday" if is_nse_holiday(today) else None
@@ -150,6 +158,9 @@ def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int,
         wanted = {s.removesuffix(".md") for s in intake.required_stages}
         if wanted:
             dag = [s for s in dag if s in wanted]
+    if mode not in _ORDER_MODES:  # intraday/postclose: no order stages (see _TRADE_STAGES)
+        # ponytail: wire a real manage/exit path here when intraday needs to trim positions.
+        dag = [s for s in dag if s not in _TRADE_STAGES]
 
     for name in dag:
         if time.monotonic() > deadline:
@@ -387,8 +398,12 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
             return 1
         book = hydrate(book_path, settings.paper_starting_inr)
         pre_fills = len(book.fills)  # replayed history; anything past this is new
+        # Cycle mode drives the route-time trade policy (postclose routes nothing,
+        # intraday exits only). prepare_cycle names run dirs `<ts>_<mode>`, so the
+        # trailing token is the authoritative mode regardless of backend.
+        cycle_mode = run_dir.name.rsplit("_", 1)[-1]
         try:
-            routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led)
+            routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led, mode=cycle_mode)
         except Exception as exc:  # malformed orders.json -> loud abort, no routing
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
             print("tradeloop_route=ORDERS_INVALID")
@@ -402,6 +417,7 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
             append_book(book_path, new_fills, hard_stops=stops)
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
+        mode_blocked = sum(1 for r in routed if r.status == "MODE_DISALLOWED")
         # Post-route accountability sweep (P4). Observability only, over the fills just
         # committed to the ledger - it must NEVER turn a good route into a failure, so a
         # throwing audit is recorded and the route still reports OK.
@@ -414,7 +430,7 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
                                  run_id=run_dir.name, timestamp=_now_iso(), live_ready=False)
         except Exception as exc:
             (run_dir / "audit_error.txt").write_text(f"postclose audit failed: {exc}\n", encoding="utf-8")
-        print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected}")
+        print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected} mode_blocked={mode_blocked}")
         return 0
 
 

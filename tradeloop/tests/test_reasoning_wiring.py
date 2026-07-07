@@ -51,6 +51,20 @@ def test_openrouter_backend_runs_dag_and_python_writes_orders_json(tmp_path):
     assert (d / "41_pm_decision.json").exists()
 
 
+def test_postclose_skips_trade_stages_and_proposes_nothing(tmp_path):
+    # postclose = no trading: the DAG must not run trader/risk/PM, so orders=[] even
+    # though the fake PM would return a BUY. Regresses the 2026-07-07 mode-blind DAG.
+    d = tmp_path / "runs" / "2026-07-07_1600_postclose"
+    d.mkdir(parents=True)
+    for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
+        (d / f).write_text(f"# {f}\n")
+    rc = orchestrator._run_reasoning(d, "postclose", "openrouter", 1200, client=StageFakeClient())
+    assert rc == 0
+    assert json.loads((d / "orders.json").read_text())["orders"] == []
+    assert not (d / "30_trade_plan.json").exists()
+    assert not (d / "41_pm_decision.json").exists()
+
+
 def test_claude_backend_dispatches_to_subagent_subprocess(tmp_path, monkeypatch):
     # The default backend must reason via the Claude Code subagent subprocess
     # (run_cycle.sh claude path), NOT the in-process OpenRouter DAG.
