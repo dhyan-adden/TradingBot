@@ -40,6 +40,37 @@ def test_postclose_audit_helper_flags_bad_filled_order(tmp_path):
     assert any(d["severity"] == "material_weakness" for d in controls["deficiencies"])
 
 
+def test_near_cap_filled_batch_is_not_falsely_flagged(tmp_path):
+    # Regression: two same-sector FILLED orders at ~24% each (48% < the 50% sector cap)
+    # must NOT be flagged. Re-checking against the POST-fill book double-counts each
+    # position (~72%) and false-flags both as material_weakness; the pre-route
+    # reconstruction re-evaluates each against the gate's real pre-trade context.
+    root = _fresh_root(tmp_path)  # universe.yaml: HDFCBANK + SBIN are both Financial Services
+    run_dir = root / "runs" / "2026-07-07_1310_premarket"
+    run_dir.mkdir(parents=True)
+    orders = [{"ticker": "HDFCBANK", "side": "BUY", "quantity": 30, "price": 800.0,
+               "hard_stop": 776.0, "status": "FILLED"},
+              {"ticker": "SBIN", "side": "BUY", "quantity": 30, "price": 800.0,
+               "hard_stop": 776.0, "status": "FILLED"}]
+    (run_dir / "orders.json").write_text(json.dumps(
+        {"mode": "premarket", "orders": orders, "held": []}), encoding="utf-8")
+    (run_dir / "fills.json").write_text(json.dumps(
+        [{"mode": "paper", "status": "FILLED", "payload": {"symbol": "HDFCBANK"}},
+         {"mode": "paper", "status": "FILLED", "payload": {"symbol": "SBIN"}}]), encoding="utf-8")
+    led = Ledger(root / "state" / "ledger.db")
+    for i, sym in enumerate(("HDFCBANK", "SBIN")):
+        led.append({"type": ORDER_FILLED, "order_id": f"PAPER-{i}", "symbol": sym,
+                    "side": "BUY", "quantity": 30, "fill_price": 800.0,
+                    "product": "CNC", "status": "FILLED"})
+
+    orchestrator._run_postclose_audit(run_dir, root=root, memory_root=root / "memory",
+                                      run_id="R1", timestamp="2026-07-07T16:00")
+
+    report = json.loads((run_dir / "controls.json").read_text(encoding="utf-8"))
+    assert not any(d["severity"] == "material_weakness" for d in report["deficiencies"]), report
+    assert report["tested"] == 2 and report["passed"] == 2
+
+
 def test_route_cycle_invokes_audit_after_successful_route(monkeypatch, tmp_path):
     # Wiring guard: a successful route MUST fire the audit. Dropping the call would
     # otherwise pass the whole suite silently (the accountability layer never runs).

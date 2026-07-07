@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
-from tradeloop.lib.audit import attribution, controls, reconcile
+from tradeloop.lib.audit import controls, reconcile
 from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger, LedgerTamperError
 from tradeloop.lib.audit.postclose import run_postclose_learning
 from tradeloop.lib.broker.orders_schema import load_orders
@@ -284,10 +284,15 @@ def _run_postclose_audit(run_dir: Path, root: Path, memory_root: Path,
     ROUTING-OUTCOME dicts route_orders_file wrote to fills.json (that shape is what
     lets it flag a bad order recorded status=FILLED).
 
-    ponytail: the control test re-evaluates each order against the POST-fill book
-    (state already holds the just-routed positions), so a cap re-check can differ
-    from the incremental pre-fill gate; a faithful pre-fill replay is the upgrade if
-    control precision ever matters. Today's book stays under caps, so no false flag."""
+    The control re-check evaluates each order against the PRE-route book (this run's
+    fills undone), reproducing the gate's actual pre-trade context. Re-checking against
+    the post-fill book would double-count the just-routed position in the sector/total
+    caps and falsely flag a legitimately-filled near-cap order as a gate leak (verified:
+    HDFCBANK+SBIN at ~49% Financials would each re-eval at ~73%).
+    ponytail: pre-route reconstruction is static, not incremental - a batch that
+    collectively breaches a cap while each order is individually clean (and the gate
+    rejected the later one) can still surface as a significant_deficiency; faithful
+    per-order incremental replay is the upgrade if that case ever bites."""
     settings = load_settings(root / "config" / "settings.yaml")
     orders = load_orders(run_dir / "orders.json")
 
@@ -298,13 +303,28 @@ def _run_postclose_audit(run_dir: Path, root: Path, memory_root: Path,
     records = load_ticker_master(root / "config" / "universe.yaml")
     universe = [r.symbol for r in records]
     sectors = {r.symbol.strip().upper(): r.sector for r in records}
-    # equity basis (cash + deployed) mirrors router._equity, so the control re-derivation
-    # uses the same capital the live gate did - not post-fill cash alone.
+    # equity basis (cash + deployed at cost) mirrors router._equity, so the control
+    # re-derivation uses the same capital the live gate did - not post-fill cash alone.
     equity = book.cash_inr + sum(q * book.avg_prices.get(s, 0.0) for s, q in book.positions.items())
     caps = risk_caps(settings, universe, equity)
+
+    # Pre-route book: undo THIS run's FILLED orders so each is re-evaluated against the
+    # positions the gate actually saw before it routed (no self double-count).
+    filled_syms = {str(f.get("payload", {}).get("symbol", "")).strip().upper()
+                   for f in json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
+                   if str(f.get("status", "")).upper() == "FILLED"}
+    pre_positions, pre_avg = dict(book.positions), dict(book.avg_prices)
+    for o in orders.orders:
+        sym = o.ticker.strip().upper()
+        if sym not in filled_syms:
+            continue
+        pre_positions[sym] = pre_positions.get(sym, 0) - (int(o.quantity) if o.side.upper() == "BUY" else -int(o.quantity))
+        if pre_positions[sym] <= 0:
+            pre_positions.pop(sym, None)
+            pre_avg.pop(sym, None)
     state = RiskState(
-        cash_inr=book.cash_inr, positions=dict(book.positions), avg_prices=dict(book.avg_prices),
-        sectors={**{s: sectors.get(s, "") for s in book.positions},
+        cash_inr=book.cash_inr, positions=pre_positions, avg_prices=pre_avg,
+        sectors={**{s: sectors.get(s, "") for s in pre_positions},
                  **{o.ticker.strip().upper(): sectors.get(o.ticker.strip().upper(), "") for o in orders.orders}})
 
     # 1) reconcile positions across independent derivations (ledger-fill shape)
@@ -321,10 +341,8 @@ def _run_postclose_audit(run_dir: Path, root: Path, memory_root: Path,
     (run_dir / "controls.json").write_text(
         json.dumps(dataclasses.asdict(report), indent=2), encoding="utf-8")
 
-    # 3) attribution (ledger-fill shape) - computed for provenance; the learning loop renders it
-    attribution.report(orders, ledger_fills)
-
-    # 4) learning loop: journal + dossiers + strategy_performance.md (Python-owned)
+    # 3) learning loop: journal + dossiers + strategy_performance.md (Python-owned;
+    #    it computes attribution internally over the ledger fills)
     return run_postclose_learning(run_dir, memory_root, ledger_fills,
                                   run_id=run_id, timestamp=timestamp, live_ready=live_ready)
 
