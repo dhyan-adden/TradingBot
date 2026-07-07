@@ -1,0 +1,45 @@
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [
+        "af159ae254ba",
+        "a3f17a910b37",
+        "15d2902e7379"
+      ],
+      "ticker": "ICICIBANK",
+      "claim": "Regulation 74 compliance and participation in TPG-led Aseem Infra Finance deal demonstrate strong corporate governance and strategic growth optionality."
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "claim": "AI-driven sector rotation from Kospi selloff and recent accumulate rating provide near-term momentum while fundamentals remain solid."
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "b164b85650b2"
+      ],
+      "ticker": "TCS",
+      "claim": "IT sector benefits from AI rotation theme; Q1 preview focus on AI strategy and discretionary spending could catalyze re-rating."
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "fb6b6bcabdb1"
+      ],
+      "ticker": "HDFCBANK",
+      "claim": "Buy call with Rs 1,850 target and double-digit Q1 deposit/advance growth expectation point to strong earnings visibility."
+    },
+    {
+      "evidence": [
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "claim": "Jefferies highlights strong loan CAGR and ROE; $500M bond issuance provides funding depth for growth."
+    }
+  ]
+}

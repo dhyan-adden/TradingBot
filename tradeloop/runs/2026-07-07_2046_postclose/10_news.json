@@ -1,0 +1,64 @@
+{
+  "evidence": [
+    "225fa65b1a25",
+    "f2d6c394d392",
+    "702457e4a178",
+    "c0f8b023344d",
+    "d3c8a7ff50cc"
+  ],
+  "macro_context": "RBI to conduct Rs 25,000-cr overnight VRR auction (Jul 8). Rupee strengthened to 94.96, best day in three weeks. Global oil prices rising, Asian refiners shift to cheaper Gulf oil. US equity futures lower as chip stocks retreat. Indian indices (Sensex, Nifty 50) snapped four-day winning streak due to oil rise. FMCG sector Q1 preview expects healthy topline and resilient margins.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "fb6b6bcabdb1"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "Buy call from ICICI Securities (target Rs 1,850) and double-digit Q1 deposit/advance growth",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "af159ae254ba",
+        "a3f17a910b37",
+        "15d2902e7379"
+      ],
+      "ticker": "ICICIBANK",
+      "catalyst": "Corporate announcements (Regulation 74 certificate) and participation in Aseem Infrastructure Finance acquisition by TPG consortium",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "catalyst": "IT stocks surge up to 4% on AI-driven rotation from Kospi selloff; Accumulate rating from KR Choksey",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "catalyst": "Jefferies highlights 13% loan CAGR, 14% ROE, $500M 5-yr bond issuance",
+      "tier": "C"
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "b164b85650b2"
+      ],
+      "ticker": "TCS",
+      "catalyst": "IT stocks rise on rotation from AI-led Kospi rout; Q1 preview with focus on AI strategy and discretionary spending",
+      "tier": "A"
+    }
+  ],
+  "macro_themes": [
+    "Oil price rise impacts Indian equities",
+    "RBI liquidity management via variable rate repo auction",
+    "Rupee strength driven by NDF dollar sales and short covering",
+    "IT sector rotation benefiting from AI-related selloff in Korean markets",
+    "FMCG sector Q1 earnings preview: healthy topline, resilient margins"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "evidence": [
+    "f2d6c394d392",
+    "d3cb02d7b582",
+    "94263583ef59",
+    "c0f8b023344d",
+    "d3c8a7ff50cc",
+    "dc7d95edab25"
+  ],
+  "macro_context": "Rupee strengthened to 94.96/USD, best in three weeks. Oil prices rose, snapping Sensex/Nifty four-day winning streak. Asian refiners shifting to cheaper Gulf oil. FMCG sector expected healthy topline and resilient margins in Q1. IT stocks rose despite AI worries triggering Kospi selloff.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "Icici Securities upgrade to Buy with target Rs 1850",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "catalyst": "Jefferies positive outlook (13% loan CAGR, 14% ROE) and Motilal Oswal Buy target Rs 1300",
+      "tier": "C"
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "catalyst": "AI worries trigger Kospi selloff lifting Indian IT; KR Choksey Accumulate target Rs 1531",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "dc7d95edab25"
+      ],
+      "ticker": "TCS",
+      "catalyst": "AI-driven rotation boosts Indian IT stocks; Q1 preview in focus",
+      "tier": "A"
+    }
+  ],
+  "macro_themes": [
+    "Oil price risk and inflation",
+    "Rupee appreciation against USD",
+    "AI-driven sector rotation from Korean to Indian IT",
+    "FMCG margin resilience and topline growth preview"
+  ]
+}

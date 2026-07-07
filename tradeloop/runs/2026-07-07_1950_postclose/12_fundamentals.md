@@ -1,0 +1,53 @@
+# 12_fundamentals
+
+```json
+{
+  "evidence": [
+    "d1b9485d5e12",
+    "fb6b6bcabdb1",
+    "4706813989b5",
+    "f14e444e0afd",
+    "dc7d95edab25",
+    "8a55bda0b6c4",
+    "b164b85650b2"
+  ],
+  "tags": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "fb6b6bcabdb1"
+      ],
+      "ticker": "HDFCBANK",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "b164b85650b2"
+      ],
+      "ticker": "TCS",
+      "tag": "green",
+      "red_flags": []
+    }
+  ]
+}
+```

@@ -1,0 +1,89 @@
+# 21_bear
+
+```json
+{
+  "evidence": [
+    "dc7d95edab25",
+    "8a55bda0b6c4",
+    "b164b85650b2",
+    "d1b9485d5e12",
+    "fb6b6bcabdb1",
+    "4706813989b5",
+    "f14e444e0afd"
+  ],
+  "arguments": [
+    {
+      "evidence": [
+        "dc7d95edab25"
+      ],
+      "ticker": "INFY",
+      "claim": "Thesis rests on a sector-level catalyst (AI/Kospi selloff absorption) that has already driven a 4% move; chasing a 5-day trade post-spike invites mean-reversion risk, and the 'wait for dip' qualifier suggests the setup is not actionable at current levels."
+    },
+    {
+      "evidence": [
+        "dc7d95edab25"
+      ],
+      "ticker": "TCS",
+      "claim": "Same sector rotation risk as INFY; the Q1 preview is a non-binding catalyst, and the 'chart confirmation' requirement implies no entry signal exists yet, making this a conditional idea rather than a confirmed long."
+    },
+    {
+      "evidence": [
+        "fb6b6bcabdb1"
+      ],
+      "ticker": "HDFCBANK",
+      "claim": "The ICICI Securities upgrade is a single-broker call (Tier-B evidence); the hard stop at 807.24 is ~5% below the current level, offering a poor risk-reward if the stock gaps on any negative Q1 read-through."
+    },
+    {
+      "evidence": [
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "claim": "The upgrade catalyst is Tier-C-only (lowest source track); the thesis is to 'hold' and add only on a specific condition not yet met, indicating no immediate long rationale beyond a pre-existing position."
+    },
+    {
+      "evidence": [],
+      "ticker": "DABUR",
+      "claim": "The macro theme is speculative ('flags healthy Q1') with no concrete news; the 20-day breakout score is the weakest on the shortlist at 6.0, and FMCG defensives typically underperform in broad market rallies."
+    },
+    {
+      "evidence": [],
+      "ticker": "CYIENTDLM",
+      "claim": "Pure technical setup with no evidential catalyst; small-cap defence/aero names are prone to false breakouts on low volume and can reverse sharply if broader market risk appetite fades."
+    },
+    {
+      "evidence": [],
+      "ticker": "TITAN",
+      "claim": "Discretionary recovery play is a macro bet without supporting data; large-cap breakouts can trap late entrants if the Nifty fails to hold key levels."
+    },
+    {
+      "evidence": [],
+      "ticker": "INDUSINDBK",
+      "claim": "Spillover thesis from HDFCBANK upgrade is second-order and speculative; private bank correlations break down during stress, and the stock has a history of underperforming peers on sector-wide news."
+    },
+    {
+      "evidence": [],
+      "ticker": "PNBHOUSING",
+      "claim": "Housing finance beneficiary claim is third-order from a single broker upgrade; small-cap NBFC/HFC names face disproportionate risk in any rate or liquidity scare."
+    },
+    {
+      "evidence": [],
+      "ticker": "JBCHEPHARM",
+      "claim": "Defensive pharma play is contrarian to the 'risk-on' tone of the shortlist; the breakout lacks a fundamental catalyst, and pharma defensives often see profit-taking during market recoveries."
+    },
+    {
+      "evidence": [],
+      "ticker": "NAUKRI",
+      "claim": "Internet/services discretionary is a high-beta bet; the 'size small' qualifier in the thesis acknowledges elevated risk, and breakouts in this space often fail without sector-wide momentum."
+    }
+  ],
+  "tier_c_only": [
+    "SBIN"
+  ],
+  "pump_risk": [
+    "INFY",
+    "TCS",
+    "CYIENTDLM",
+    "NAUKRI"
+  ]
+}
+```

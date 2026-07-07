@@ -1,0 +1,55 @@
+# 22_debate
+
+```json
+{
+  "evidence": [
+    "dc7d95edab25",
+    "8a55bda0b6c4",
+    "d1b9485d5e12",
+    "4706813989b5",
+    "f14e444e0afd"
+  ],
+  "names": [
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "conviction": 5.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "dc7d95edab25"
+      ],
+      "ticker": "TCS",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "conviction": 5.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [],
+      "ticker": "MPHASIS",
+      "conviction": 3.0,
+      "verdict": "pass"
+    }
+  ]
+}
+```

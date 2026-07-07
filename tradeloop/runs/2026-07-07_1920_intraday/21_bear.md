@@ -1,0 +1,103 @@
+# 21_bear
+
+```json
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [
+        "dc7d95edab25",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "claim": "AI-driven Korean-to-Indian IT rotation thesis is speculative narrative with no fundamental data; INFY trades at premium valuations and any macro shock or USD/INR move can reverse the 'rotation' quickly."
+    },
+    {
+      "evidence": [
+        "dc7d95edab25"
+      ],
+      "ticker": "TCS",
+      "claim": "Same unvalidated rotation thesis as INFY; TCS is lower-beta and typically lags on momentum trades, making it a weaker vehicle for a 1-5 day tactical play."
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "claim": "Single-broker upgrade (Icici Securities) is Tier-B evidence; HDFCBANK is already near all-time highs with rich P/E, leaving limited upside to Rs 1850 target and high downside on any miss."
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "claim": "Purely analyst-outlook driven with no hard data; Jefferies/Motilal views are forward estimates, not confirmed results. PSU bank vol can spike on policy surprises."
+    },
+    {
+      "evidence": [],
+      "ticker": "MPHASIS",
+      "claim": "Technical breakout with zero supporting news evidence; relies entirely on chart pattern which has high false-breakout rate in midcap IT."
+    },
+    {
+      "evidence": [],
+      "ticker": "DATAMATICS",
+      "claim": "Small-cap IT technical breakout with no fundamental catalyst or news backing; illiquidity amplifies downside risk on reversal."
+    },
+    {
+      "evidence": [],
+      "ticker": "CYIENTDLM",
+      "claim": "Niche engineering-services name with thin float; breakout on volume may reflect operator activity rather than durable buying; no fundamental evidence."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUBLFOOD",
+      "claim": "FMCG topline/margin resilience theme is generic; JUBLFOOD's own fundamentals show margin pressure from input costs; breakout may be mean-reversion, not trend."
+    },
+    {
+      "evidence": [],
+      "ticker": "63MOONS",
+      "claim": "Historic scam-linked company with volatile speculative trading pattern; 'strong volume breakout' in such names frequently precedes sharp reversals; no fundamental evidence."
+    },
+    {
+      "evidence": [],
+      "ticker": "TITAN",
+      "claim": "Quality largecap but already trades at stretched valuations; a 1-5 day breakout trade offers poor risk-reward when 52-week highs act as resistance."
+    },
+    {
+      "evidence": [],
+      "ticker": "HCLTECH",
+      "claim": "Breakout is 'normal volume' with no unique catalyst beyond sector proxy; buying HCLTech for rotation when INFY/TCS have stronger confirmation is inefficient."
+    },
+    {
+      "evidence": [],
+      "ticker": "COFORGE",
+      "claim": "'Normal volume' breakout in a midcap IT name with no fundamental evidence; midcap IT can gap down on single negative broker note."
+    },
+    {
+      "evidence": [],
+      "ticker": "DABUR",
+      "claim": "FMCG breakout is likely defensive rotation rather than growth catalyst; Dabur's recent quarters show volume growth slowdown making breakout suspect."
+    },
+    {
+      "evidence": [],
+      "ticker": "BAJFINANCE",
+      "claim": "NBFC breakout with normal volume and no specific catalyst; high beta name where a 1-5 day window exposes to outsized drawdown on any rate or credit surprise."
+    },
+    {
+      "evidence": [],
+      "ticker": "MARUTI",
+      "claim": "Auto bellwether but cyclical nature means breakout can reverse on monthly sales data or commodity price spike; no fundamental tailwind in evidence."
+    }
+  ],
+  "tier_c_only": [
+    "SBIN"
+  ],
+  "pump_risk": [
+    "63MOONS",
+    "DATAMATICS",
+    "CYIENTDLM",
+    "MPHASIS"
+  ]
+}
+```

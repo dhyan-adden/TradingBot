@@ -1,0 +1,55 @@
+# 41_pm_decision
+
+```json
+{
+  "evidence": [],
+  "orders": [
+    {
+      "ticker": "CYIENTDLM",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 17,
+      "price": 538.0,
+      "order_type": "LIMIT",
+      "hard_stop": 504.22,
+      "target_1": 583.04,
+      "target_2": 605.55,
+      "max_entry_price": 538.0,
+      "strategy_family": "breakout",
+      "status": "PENDING",
+      "reason": "Cleanest breakout in universe (score 8.0, volume-confirmed). Risk-resized from 44 to 17 shares by Risk; per-trade risk 0.57% equity (574 INR), well within 1.5% cap; position size 9.14% equity, within single-position limit. Defence/aero thematic tailwind. Conviction 5."
+    },
+    {
+      "ticker": "SWIGGY",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 28,
+      "price": 266.23,
+      "order_type": "LIMIT",
+      "hard_stop": 253.95,
+      "target_1": 282.6,
+      "target_2": 290.79,
+      "max_entry_price": 266.23,
+      "strategy_family": "breakout",
+      "status": "PENDING",
+      "reason": "Score 8.0 volume-confirmed breakout at 266.23. Risk-resized from 93 to 28 shares to keep single-position size at 7.46% equity; per-trade risk 0.34% (343 INR). New-age discretionary; oil/macro risk flagged but mitigated by tight sizing. Conviction 3."
+    },
+    {
+      "ticker": "JBCHEPHARM",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 3,
+      "price": 2420.0,
+      "order_type": "LIMIT",
+      "hard_stop": 2350.28,
+      "target_1": 2512.96,
+      "target_2": 2559.44,
+      "max_entry_price": 2420.0,
+      "strategy_family": "breakout",
+      "status": "PENDING",
+      "reason": "Defensive pharma hedge against oil/macro stress; score 8.0 breakout at 2420.00. Risk-resized from 10 to 3 shares (7.26% equity, 0.21% per-trade risk) — R:R only ~1.3:1 so kept tiny per Risk. Conviction 3."
+    }
+  ],
+  "held": []
+}
+```
