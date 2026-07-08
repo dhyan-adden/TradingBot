@@ -135,6 +135,27 @@ def test_missing_api_key_raises(tmp_path, monkeypatch):
         c.call_json("14_shortlist", "s", "u", Shortlist)
 
 
+def test_reasoning_disabled_in_payload(tmp_path, monkeypatch):
+    # regression (live 2026-07-08): mimo/minimax/deepseek are reasoning models and
+    # OpenRouter counts hidden reasoning against max_tokens (4000). On complex
+    # stages reasoning alone overran the budget -> finish_reason=length with
+    # content="" ("model returned empty content") on EVERY retry and fallback,
+    # killing the cycle deterministically. All stages are schema-validated JSON
+    # extraction, so reasoning burn buys nothing: it must be disabled per-request.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-secret")
+    seen = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen["payload"] = dict(json)
+        return httpx.Response(200, json=_load("or_ok_shortlist.json"),
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(client_mod.httpx, "post", fake_post)
+    c = LLMClient(audit_path=tmp_path / "llm_calls.jsonl", backoff_base=0.0)
+    c.call_json("14_shortlist", "s", "u", Shortlist)
+    assert seen["payload"]["reasoning"] == {"enabled": False}
+
+
 def test_downgrades_response_format_on_400(tmp_path, monkeypatch):
     # A provider that 400s on response_format must not fail the cycle: the client
     # drops response_format and retries on prompt + extraction alone.
@@ -158,3 +179,5 @@ def test_downgrades_response_format_on_400(tmp_path, monkeypatch):
     assert calls["n"] == 2                          # 400, then success
     assert "response_format" in payloads[0]         # first attempt nudged
     assert "response_format" not in payloads[1]     # retry downgraded after the 400
+    assert "reasoning" in payloads[0]               # reasoning-off nudge sent first
+    assert "reasoning" not in payloads[1]           # dropped with the same downgrade

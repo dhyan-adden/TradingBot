@@ -115,6 +115,15 @@ class LLMClient:
                 # this stays broadly-supported (json_object, not strict json_schema
                 # which some providers 400 on) and is dropped on a 400 downgrade.
                 "response_format": {"type": "json_object"},
+                # All three routed models are reasoning models, and OpenRouter
+                # counts hidden reasoning against max_tokens. On complex stages
+                # reasoning alone overran the 4000 budget -> finish_reason=length
+                # with empty content on every retry AND fallback (live
+                # 2026-07-08, 14_shortlist died 4/4). Stages are schema-validated
+                # JSON extraction, so reasoning burn buys nothing: off, always.
+                # (reasoning:{max_tokens:N} is silently ignored by these
+                # providers; enabled:false verified working on all three.)
+                "reasoning": {"enabled": False},
                 "messages": [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user},
@@ -141,8 +150,9 @@ class LLMClient:
                     # extraction instead of hard-failing the whole cycle.
                     if (isinstance(exc, httpx.HTTPStatusError)
                             and exc.response.status_code == 400
-                            and "response_format" in payload):
+                            and ("response_format" in payload or "reasoning" in payload)):
                         payload.pop("response_format", None)
+                        payload.pop("reasoning", None)
                     self._record(_failed_record(role, m, prompt, str(exc)))
                     if attempt < self.max_retries - 1:
                         time.sleep(self.backoff_base * (2 ** attempt))
