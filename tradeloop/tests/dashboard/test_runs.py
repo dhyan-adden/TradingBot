@@ -49,6 +49,45 @@ def test_read_run_surfaces_reasoning_failure_not_a_hold(tmp_path):
     assert out["live"] is False                      # failed, not "still running"
     assert "did not finish" in out["decision"]["summary"]
     assert "Holding" not in out["decision"]["summary"]
+    runs = list_runs(tmp_path)                       # dropdown must not lie either
+    assert "Holding" not in runs[0].decision
+
+
+def test_read_run_in_flight_not_a_hold(tmp_path):
+    # regression (live 2026-07-08): an IN-FLIGHT run (no PM decision yet, orders.json
+    # still prepare's empty placeholder) rendered a confident "Holding today" on the
+    # decision card - a lie while the scan/reasoning is still running.
+    d = _make_run(tmp_path, "2026-07-08_1312_intraday", False)
+    (d / "orders.json").write_text("[]")             # prepare's placeholder
+    out = read_run(d)
+    assert out["live"] is True
+    assert "Holding" not in out["decision"]["summary"]
+    assert "till running" in out["decision"]["summary"]  # "Still running..."
+
+
+def test_list_runs_in_flight_not_a_hold(tmp_path):
+    # the run-history dropdown showed the same false "Holding today" for a live run
+    d = _make_run(tmp_path, "2026-07-08_1312_intraday", False)
+    (d / "orders.json").write_text("[]")
+    runs = list_runs(tmp_path)
+    assert "Holding" not in runs[0].decision
+    assert "till running" in runs[0].decision
+
+
+def test_completed_intraday_run_is_not_still_running(tmp_path):
+    # intraday/postclose skip the PM stage, so 41_pm_decision.json NEVER exists for
+    # them; the real end-of-run marker is the orders.json dict _run_reasoning writes
+    # (prepare's placeholder is the list []). A finished intraday run must read as
+    # a decision, not as perpetually "Still running".
+    d = _make_run(tmp_path, "2026-07-08_1312_intraday", False)
+    (d / "orders.json").write_text(json.dumps(
+        {"mode": "intraday", "generated_by": "tradeloop.reasoning.p1",
+         "orders": [], "held": []}))
+    out = read_run(d)
+    assert out["live"] is False
+    assert "till running" not in out["decision"]["summary"]
+    runs = list_runs(tmp_path)
+    assert "till running" not in runs[0].decision
 
 
 def test_read_run_tolerates_missing_and_malformed_files(tmp_path):

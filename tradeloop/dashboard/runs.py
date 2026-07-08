@@ -11,6 +11,8 @@ STAGE_ORDER = [
     "20_bull", "21_bear", "22_debate", "30_trade_plan", "40_risk_report",
 ]
 
+IN_FLIGHT = "Still running - no decision yet."
+
 
 @dataclass
 class RunSummary:
@@ -39,9 +41,15 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
     out = []
     for d in sorted((p for p in runs_dir.iterdir() if p.is_dir()),
                     key=lambda p: p.name, reverse=True):
+        # same truthfulness rules as read_run: an unfinished run is not a "hold"
         orders = _load(d / "orders.json") or {}
-        dec = render_decision(orders)
-        out.append(RunSummary(dir_name=d.name, mode=_mode(d.name), decision=dec.summary))
+        if (d / "reasoning_error.txt").exists():
+            summary = "This run did not finish."
+        elif not orders:
+            summary = IN_FLIGHT
+        else:
+            summary = render_decision(orders).summary
+        out.append(RunSummary(dir_name=d.name, mode=_mode(d.name), decision=summary))
     return out
 
 
@@ -53,7 +61,6 @@ def read_run(run_dir: Path) -> dict:
         if raw is None:
             continue  # not written yet
         stages.append(asdict(render_stage(stage, raw)))
-    decision_raw = _load(run_dir / "41_pm_decision.json")
     orders = _load(run_dir / "orders.json") or {}
     decision = asdict(render_decision(orders))
     err_path = run_dir / "reasoning_error.txt"
@@ -61,7 +68,13 @@ def read_run(run_dir: Path) -> dict:
     if error:
         # a crashed run must NOT read as a clean "hold" - say so plainly
         decision["summary"] = "This run did not finish - " + error.splitlines()[0]
-    # a failed run is neither live nor a real decision; only "no decision yet" is live
-    live = decision_raw is None and not error
+    # end-of-run marker = the orders.json DICT _run_reasoning writes for every mode
+    # (intraday/postclose skip the PM stage, so 41_pm_decision.json can't mark it;
+    # prepare's placeholder is the list [], which _load-or-{} leaves falsy)
+    live = not orders and not error
+    if live:
+        # regression (2026-07-08): the empty orders.json placeholder rendered a
+        # confident "Holding today" while the run was still scanning/reasoning
+        decision["summary"] = IN_FLIGHT
     return {"dir": run_dir.name, "live": live, "stages": stages,
             "decision": decision, "error": error}
