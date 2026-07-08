@@ -1,0 +1,100 @@
+# 21_bear
+
+```json
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [
+        "ca8cc799fb20",
+        "fbc1b4e35cf2"
+      ],
+      "ticker": "TCS",
+      "claim": "Earnings imminent but AI strategy narrative is speculative; Q1 results could disappoint if deal intake slows or margin guidance disappoints, and the stock has already priced in optimistic expectations given 8.5 composite score and sector momentum."
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "claim": "Broker upgrade and Nomura top pick are backward-looking; HDFCBANK has persistent asset quality concerns in unsecured lending and RBI tightening, and ₹1850 target may be aggressive if credit costs rise."
+    },
+    {
+      "evidence": [
+        "07ce3fb10740"
+      ],
+      "ticker": "ICICIBANK",
+      "claim": "TPG-led acquisition catalyst is uncertain and may not close; Nomura top pick could be crowded trade, and bank faces margin pressure from rising deposit costs."
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "703da456d202"
+      ],
+      "ticker": "INFY",
+      "claim": "IT sector momentum ahead of TCS results is speculative; INFY's broker calls rely on pullback levels that may not hold, and macro headwinds (US slowdown) could hurt deal pipelines."
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "claim": "Technical breakout with no fundamental catalyst; 20-day breakout could be a false signal in thin volume, and auto ancillary sector faces demand uncertainty."
+    },
+    {
+      "evidence": [],
+      "ticker": "ALKYLAMINE",
+      "claim": "Technical breakout with above-threshold volume but no news-driven catalyst; chemical sector faces pricing pressure and demand volatility, making breakout prone to reversal."
+    },
+    {
+      "evidence": [],
+      "ticker": "NAUKRI",
+      "claim": "Technical breakout in recruitment sector leader, but sector may be cyclical with hiring slowdown risks; momentum could fade if macro conditions deteriorate."
+    },
+    {
+      "evidence": [],
+      "ticker": "DLINKINDIA",
+      "claim": "Technical breakout with above-threshold volume, but networking equipment sector is competitive and growth may be limited without strong order book confirmation."
+    },
+    {
+      "evidence": [],
+      "ticker": "GEMAROMA",
+      "claim": "Technical breakout at ₹211.49 with tight stop, but stock is small-cap and prone to manipulation; pump risk is high if volume is driven by speculative traders."
+    },
+    {
+      "evidence": [],
+      "ticker": "LODHA",
+      "claim": "Technical breakout in real estate, but sector faces regulatory risks and interest rate sensitivity; bullish continuation may not sustain if housing demand softens."
+    },
+    {
+      "evidence": [],
+      "ticker": "SUPRAJIT",
+      "claim": "Technical breakout in auto ancillary, but sector is exposed to auto cycle downturns; momentum may not hold if OEM production slows."
+    },
+    {
+      "evidence": [],
+      "ticker": "SHAREINDIA",
+      "claim": "Technical breakout in financial services, but stock is small-cap with potential liquidity issues; bullish signal could be a trap if broader market corrects."
+    },
+    {
+      "evidence": [],
+      "ticker": "RPGLIFE",
+      "claim": "Technical breakout at ₹2559.40, but high price point may deter retail investors; momentum could reverse if market sentiment shifts."
+    }
+  ],
+  "tier_c_only": [
+    "LUMAXIND",
+    "ALKYLAMINE",
+    "NAUKRI",
+    "DLINKIND",
+    "GEMAROMA",
+    "LODHA",
+    "SUPRAJIT",
+    "SHAREINDIA",
+    "RPGLIFE"
+  ],
+  "pump_risk": [
+    "GEMAROMA",
+    "SHAREINDIA",
+    "RPGLIFE"
+  ]
+}
+```

@@ -1,0 +1,30 @@
+{
+  "evidence": [
+    "ca8cc799fb20",
+    "fbc1b4e35cf2",
+    "d1b9485d5e12",
+    "07ce3fb10740"
+  ],
+  "scores": [
+    {
+      "ticker": "TCS",
+      "sentiment_score": 0.6,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "HDFCBANK",
+      "sentiment_score": 0.8,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "INFY",
+      "sentiment_score": 0.7,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "ICICIBANK",
+      "sentiment_score": 0.75,
+      "echo_chamber_flag": false
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+# 10_news
+
+```json
+{
+  "evidence": [
+    "9e77e4b691dd",
+    "b4ffd4923769",
+    "84fa76452970",
+    "f46ee0cbfe6c",
+    "144177b69528",
+    "71c97fec52a2",
+    "41c2fdc1fa0f",
+    "0aac38f92aaa",
+    "07ce3fb10740",
+    "8a55bda0b6c4",
+    "703da456d202"
+  ],
+  "macro_context": "Crude oil prices surged ~2% (Brent >$75/bbl) on escalating US-Iran hostilities, dragging bonds (yields up), rupee (opened 20 paise weaker at 95.17/USD), and oil-sensitive stocks (IndiGo, HPCL down ~5%). Gold fell for a third session as rising oil prices fuelled rate-hike expectations. Domestic equities opened higher (10-week high) led by banking names. The Nifty Oil & Gas ETF launch (ICICI Prudential) adds a thematic vehicle.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "ICICI Securities reiterates Buy with target Rs 1,850; stock led market to 10-week high on strong Q1 growth narrative; brokerages include in top picks.",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "07ce3fb10740",
+        "15d2902e7379"
+      ],
+      "ticker": "ICICIBANK",
+      "catalyst": "Featured in ET screener with up to 27% upside potential; brokerages list as top pick alongside HDFC Bank; TPG-led consortium acquisition of Aseem Infrastructure Finance includes ICICI Bank as co-invest partner.",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "703da456d202"
+      ],
+      "ticker": "INFY",
+      "catalyst": "KR Choksey recommends Accumulate (target Rs 1,531); Jay Thakkar flags short-term F&O buy opportunity; IT stocks rallied ~4% on Kospi-led AI selloff rotation, but Q1 remains muted per consensus.",
+      "tier": "B"
+    }
+  ],
+  "macro_themes": [
+    "Oil price spike (US-Iran) weighing on bonds, rupee, and oil-sensitive sectors; rate-hike repricing risk.",
+    "IT sector rotation: AI-driven Kospi selloff boosting Indian IT stocks (TCS, Infosys) despite muted Q1 expectations.",
+    "Banking strength: Q1 loan growth resilience and broker upgrades support large-cap private banks (HDFC, ICICI)."
+  ]
+}
+```

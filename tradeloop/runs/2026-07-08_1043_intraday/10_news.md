@@ -1,0 +1,59 @@
+# 10_news
+
+```json
+{
+  "evidence": [
+    "84fa76452970",
+    "f46ee0cbfe6c",
+    "144177b69528",
+    "71c97fec52a2",
+    "41c2fdc1fa0f",
+    "1e66411d91b1"
+  ],
+  "macro_context": "Crude oil prices jump 2% on escalating US-Iran war, Brent above $75/bbl. Oil-sensitive stocks plunge. Rupee falls 20 paise to 95.17/USD. Gold falls for 3rd straight session. Markets await TCS earnings this week.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "fced294056c5",
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "Q1 earnings show solid returns; ICICI Securities buy target",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "703da456d202"
+      ],
+      "ticker": "INFY",
+      "catalyst": "Accumulate rating from KR Choksey and short-term buy call from Jay Thakkar",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "07ce3fb10740"
+      ],
+      "ticker": "ICICIBANK",
+      "catalyst": "Stock with up to 27% upside per ET analysis",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "catalyst": "Jefferies sees 13% loan CAGR, 14% ROE; Motilal Oswal target Rs1,300",
+      "tier": "C"
+    }
+  ],
+  "macro_themes": [
+    "Rising crude oil prices",
+    "Geopolitical tensions (US-Iran)",
+    "Rupee depreciation",
+    "Market focus on IT earnings (TCS)",
+    "Commodity price movements (gold, crude)"
+  ]
+}
+```

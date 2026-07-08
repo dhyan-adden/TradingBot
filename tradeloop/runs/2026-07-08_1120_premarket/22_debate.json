@@ -1,0 +1,43 @@
+{
+  "evidence": [],
+  "names": [
+    {
+      "evidence": [
+        "07ce3fb10740",
+        "15d2902e7379"
+      ],
+      "ticker": "ICICIBANK",
+      "conviction": 5.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "conviction": 4.0,
+      "verdict": "pass"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "703da456d202"
+      ],
+      "ticker": "INFY",
+      "conviction": 3.0,
+      "verdict": "pass"
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "conviction": 2.0,
+      "verdict": "pass"
+    },
+    {
+      "evidence": [],
+      "ticker": "RSL",
+      "conviction": 2.0,
+      "verdict": "pass"
+    }
+  ]
+}

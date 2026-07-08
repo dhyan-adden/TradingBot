@@ -1,0 +1,30 @@
+# 11_sentiment
+
+```json
+{
+  "evidence": [
+    "07ce3fb10740",
+    "15d2902e7379",
+    "d1b9485d5e12",
+    "8a55bda0b6c4",
+    "703da456d202"
+  ],
+  "scores": [
+    {
+      "ticker": "HDFCBANK",
+      "sentiment_score": 0.6,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "ICICIBANK",
+      "sentiment_score": 0.7,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "INFY",
+      "sentiment_score": 0.3,
+      "echo_chamber_flag": false
+    }
+  ]
+}
+```

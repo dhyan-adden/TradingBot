@@ -1,0 +1,171 @@
+{
+  "evidence": [],
+  "setups": [
+    {
+      "evidence": [
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "classification": "bullish_continuation",
+      "news_confirmed": true,
+      "notes": "Upgrade path activated; bank strength theme intact. Hard stop at 807.24 is below support, so hold."
+    },
+    {
+      "evidence": [],
+      "ticker": "SBIN",
+      "classification": "exit_watch",
+      "news_confirmed": false,
+      "notes": "Pullback into EMA20 with volume normal. No news catalyst. Hold hard stop at 1015.4, but no fresh add."
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "703da456d202"
+      ],
+      "ticker": "INFY",
+      "classification": "bullish_entry",
+      "news_confirmed": true,
+      "notes": "EMA20 pullback setup with score 4.0, supported by broker upgrade and F&O opportunity. IT sector rotation tailwind. Entry at 1073.80, stop 1017.85."
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Highest-scoring breakout (10.0) with normal volume. No news catalyst, but pattern is clean."
+    },
+    {
+      "evidence": [],
+      "ticker": "RSL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 10.0, normal volume. No news catalyst, but strong technicals."
+    },
+    {
+      "evidence": [],
+      "ticker": "AEQUS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0 with above-threshold volume. No news catalyst, but volume confirms strength."
+    },
+    {
+      "evidence": [],
+      "ticker": "ALKYLAMINE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst, but setup is valid."
+    },
+    {
+      "evidence": [],
+      "ticker": "BALAMINES",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst, but clean pattern."
+    },
+    {
+      "evidence": [],
+      "ticker": "DLINKINDIA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "GEMAROMA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "HIKAL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "HLEGLAS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "IOLCP",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "MASTERTR",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "NAUKRI",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "PNGSREVA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "PWL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "RPGLIFE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "RPSGVENT",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "SGMART",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "SHAREINDIA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "VAIBHAVGBL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "WSTCSTPAPR",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Breakout score 8.0, above-threshold volume. No news catalyst."
+    }
+  ]
+}

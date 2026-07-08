@@ -1,0 +1,71 @@
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [],
+      "ticker": "ICICIBANK",
+      "claim": "Despite highest composite score, the TPG consortium deal and ET screener upside are already priced in after 5-20 day rally; dual catalysts are backward-looking rather than forward, raising risk of a pullback on any negative macro news (e.g., RBI policy shift)."
+    },
+    {
+      "evidence": [],
+      "ticker": "HDFCBANK",
+      "claim": "Market leader hitting 10-week high with 60% bullish sentiment is a classic overbought setup; broker reiteration is low-conviction, momentum-driven catalyst likely exhausted, and any broad market correction will hit large-caps hardest."
+    },
+    {
+      "evidence": [],
+      "ticker": "INFY",
+      "claim": "Sector rotation into Indian IT from AI selloff is speculative; broker Accumulate call and EMA20 pullback are technical, not fundamental, and IT sector faces structural headwinds from global AI adoption threats; 1-5 day horizon too short for meaningful entry."
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "claim": "Technical breakout with highest score (10.0) but source track is 'quiet' and evidence is empty—no fundamental catalyst; breakout patterns often fail without news support, especially in small/mid-caps, leading to false breakouts."
+    },
+    {
+      "evidence": [],
+      "ticker": "RSL",
+      "claim": "Maximum breakout score (10.0) but no evidence or fundamental catalysts; technical breakouts in low-liquidity stocks are prone to pump-and-dump risks, and the 'quiet' source track suggests lack of institutional interest."
+    },
+    {
+      "evidence": [],
+      "ticker": "AEQUS",
+      "claim": "Breakout with above-threshold volume but no news evidence; volume-driven technicals in small-caps are unreliable and susceptible to reversal; composite score 6.5 indicates weaker conviction."
+    },
+    {
+      "evidence": [],
+      "ticker": "ALKYLAMINE",
+      "claim": "Specialty chemicals breakout lacks fundamental backing; above-threshold volume may be retail-driven, not institutional; 1-5 day horizon exposes to sector-specific risks (e.g., raw material price volatility)."
+    },
+    {
+      "evidence": [],
+      "ticker": "NAUKRI",
+      "claim": "IT services proxy breakout with clean pattern but no news catalyst; technical breakouts in IT services often reverse on quarterly earnings surprises; 'quiet' source track raises concern about sustainability."
+    },
+    {
+      "evidence": [],
+      "ticker": "HIKAL",
+      "claim": "Pharma/chemicals momentum play with breakout score 8.0 but no fundamental support; sector is cyclical and prone to regulatory risks; 1-5 day horizon is too short for pharma catalysts to materialize."
+    },
+    {
+      "evidence": [],
+      "ticker": "DLINKINDIA",
+      "claim": "Tech infrastructure breakout with clean setup but no news evidence; 'quiet' source track and lack of catalysts make it a high-risk trade, likely to fail if market sentiment shifts."
+    },
+    {
+      "evidence": [],
+      "ticker": "SBIN",
+      "claim": "Green-tagged fundamentals but technical exit watch indicates bearish signal; composite score 6.0 is lowest, and 'no fresh add' suggests existing holders should exit; fundamental strength may be offset by technical weakness."
+    }
+  ],
+  "tier_c_only": [
+    "SBIN - Composite score 6.0, lowest on shortlist; tier_c source track, technical exit watch, and no fresh add recommendation."
+  ],
+  "pump_risk": [
+    "LUMAXIND - Breakout with highest score (10.0) but no evidence; classic pump setup in low-liquidity stock.",
+    "RSL - Maximum breakout score (10.0) with no news; prone to pump-and-dump due to 'quiet' source track.",
+    "AEQUS - Volume-driven breakout without fundamentals; retail-driven pump risk.",
+    "NAUKRI - IT services breakout without catalysts; likely speculative pump.",
+    "HIKAL - Pharma/chemicals breakout with no backing; cyclical pump risk.",
+    "DLINKIND - Tech infrastructure breakout with no evidence; potential pump and dump."
+  ]
+}
