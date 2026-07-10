@@ -118,6 +118,25 @@ def append_decision(path: Path, order, verdict, routed: RoutedOrder) -> None:
         handle.write(json.dumps(record, default=str) + "\n")
 
 
+def _scan_symbols(run_dir: Path) -> set:
+    """Tickers actually scanned this cycle (<run>/full_scan.jsonl) - the eligible
+    route universe when universe.source=full_nse. Absent/unreadable -> empty set,
+    so routing falls back to the config base + current holdings."""
+    try:
+        lines = (run_dir / "full_scan.jsonl").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()
+    out = set()
+    for line in lines:
+        try:
+            ticker = json.loads(line).get("ticker")
+        except ValueError:
+            continue
+        if ticker:
+            out.add(str(ticker).strip().upper())
+    return out
+
+
 def route_orders_file(
     orders_path: Path,
     fills_path: Path,
@@ -129,8 +148,16 @@ def route_orders_file(
 ) -> list[RoutedOrder]:
     of = load_orders(orders_path)  # typed; raises on malformed -> cycle aborts loudly
     records = load_ticker_master(root / "config" / "universe.yaml")
-    symbols = [r.symbol for r in records]
+    # ponytail: sectors only cover the config base; full_scan.jsonl carries no
+    # sector, so the sector cap binds only where a sector is known. Add sector to
+    # the scan record to extend it to full-NSE names.
     sectors = {r.symbol.upper(): r.sector for r in records}
+    # Eligible route universe = names actually scanned this cycle (trust the run's
+    # scan under source=full_nse) + the config base + current holdings, so a held
+    # name is always exitable even if today's scan drops it.
+    symbols = sorted(_scan_symbols(orders_path.parent)
+                     | {r.symbol.upper() for r in records}
+                     | {s.upper() for s in book.positions})
     caps = risk_caps_from(settings, symbols, _equity(book))  # capital base fixed at start-of-batch equity
     allowed_sides = _sides_for_mode(mode)
     decisions_path = orders_path.parent / "decisions.jsonl"
