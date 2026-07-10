@@ -97,7 +97,7 @@ def _risk_state(book: PaperBroker, sectors: Dict[str, str]) -> RiskState:
         cash_inr=book.cash_inr,
         positions=dict(book.positions),
         avg_prices=dict(book.avg_prices),
-        sectors={sym: sectors.get(sym, "") for sym in book.positions},
+        sectors=dict(sectors),  # full ticker-master map: an incoming NEW symbol's sector must be known to the sector cap, not just symbols already held
         open_risk_inr=0.0,   # best-effort in P0; full from persisted stops + marks in P3
         daily_pnl_inr=0.0,   # realized-only; unrealized deferred to P3 marks
     )
@@ -131,12 +131,16 @@ def route_orders_file(
     records = load_ticker_master(root / "config" / "universe.yaml")
     symbols = [r.symbol for r in records]
     sectors = {r.symbol.upper(): r.sector for r in records}
-    caps = risk_caps_from(settings, symbols, _equity(book))
-    state = _risk_state(book, sectors)
+    caps = risk_caps_from(settings, symbols, _equity(book))  # capital base fixed at start-of-batch equity
     allowed_sides = _sides_for_mode(mode)
     decisions_path = orders_path.parent / "decisions.jsonl"
     routed: list[RoutedOrder] = []
     for order in of.orders:  # held[] intentionally skipped in Phase 0
+        # Rebuild the risk state from the LIVE book each order, so a fill earlier
+        # in this batch counts toward the cumulative caps (deployment, position
+        # count, sector) when the next order is gated. Built once, a second order
+        # would be judged against stale pre-batch state and could breach them.
+        state = _risk_state(book, sectors)
         ticket = to_ticket(order)
         if ticket.side.strip().upper() not in allowed_sides:
             # Out-of-mode order (e.g. a BUY in intraday/postclose): block before the
