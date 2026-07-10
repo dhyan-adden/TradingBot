@@ -1,0 +1,44 @@
+{
+  "evidence": [],
+  "tags": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "c415673b0d8e",
+        "5376a28e2add"
+      ],
+      "ticker": "HDFCBANK",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "5b4b6e242b0d",
+        "56318e8182d6"
+      ],
+      "ticker": "INFY",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "1caada445583",
+        "bf1da3200ea0",
+        "d2aaa38d2558"
+      ],
+      "ticker": "TCS",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "8d9924d85f54"
+      ],
+      "ticker": "SBIN",
+      "tag": "green",
+      "red_flags": []
+    }
+  ]
+}

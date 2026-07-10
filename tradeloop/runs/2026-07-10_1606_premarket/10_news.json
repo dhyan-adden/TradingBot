@@ -1,0 +1,56 @@
+{
+  "evidence": [
+    "19b4fdcf1a17",
+    "b8aa8c7d3e65",
+    "d28f2dae6ee8",
+    "5b4b6e242b0d"
+  ],
+  "macro_context": "Strait of Hormuz flows resuming is easing oil-supply fear and supporting a global demand-recovery read (IEA), but the ECB is flagging geopolitical risk back at centre stage with inflation fears resurfacing - a mixed macro tape. Record NSE crude-oil options turnover signals elevated hedging/volatility positioning rather than a directional call. Nifty IT is soft into Q1 FY27 results with US Fed minutes reviving rate-path concerns, and TCS's own Q1 print (already out) is reading as sparse-positives/no re-rating trigger, setting a cautious tone for the sector.",
+  "names_in_play": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "c415673b0d8e",
+        "5376a28e2add"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst": "ICICI Securities reiterated Buy, target Rs 1850. Q1 FY27 results due Jul 18 - the key near-term catalyst for the existing long. MCLR cut 5bps effective Jul 7 (mild NIM headwind, loan-growth tailwind).",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "5b4b6e242b0d",
+        "56318e8182d6"
+      ],
+      "ticker": "INFY",
+      "catalyst": "KR Choksey reiterated Accumulate, target Rs 1531. Nifty IT choppy into Q1 results/Fed minutes; TCS's soft Q1 read-through and the Wipro/Infosys ADR bounce set the tone ahead of Infosys's own print.",
+      "tier": "B"
+    },
+    {
+      "evidence": [
+        "1caada445583",
+        "bf1da3200ea0",
+        "d2aaa38d2558"
+      ],
+      "ticker": "TCS",
+      "catalyst": "Q1 FY27 results digested: sparse positives with no re-rating trigger (Mint), and TCS is flagged alongside RIL/HUL as a bluechip that has stopped creating wealth. Employee addition hit a 4-year high amid AI-job-loss fears - a cost/headcount signal, not a bullish catalyst.",
+      "tier": "A"
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "8d9924d85f54"
+      ],
+      "ticker": "SBIN",
+      "catalyst": "No fresh actionable catalyst today - only Tier-C attention signals: Jefferies flags 13% loan CAGR / 14% ROE plus a $500M 5-yr bond raise, and the stock is up 4.2% on the week. Included solely because it is a current holding; treat as attention signal, not thesis-grade support, and keep monitoring the prior 1019 exit tripwire.",
+      "tier": "C"
+    }
+  ],
+  "macro_themes": [
+    "Crude/Strait-of-Hormuz de-escalation supports global growth optics, but ECB is re-flagging geopolitical inflation risk - net macro signal is mixed, not a clean risk-on.",
+    "Record crude-oil options turnover on NSE = elevated hedging/volatility positioning, not a directional catalyst - contrarian/attention signal only.",
+    "IT sector Q1 FY27 season underway: TCS's print offered no re-rating trigger and RIL/TCS/HUL are flagged as bluechips that stalled wealth creation - weighs on Nifty IT into HCLTech/Infosys results.",
+    "Banking Q1 preview chatter (Nomura, target-price roundups) is broad-based Tier-C noise across HDFCBANK/ICICIBANK/KMB/SBI - no single actionable trigger beyond HDFCBANK's Tier-B Buy call."
+  ]
+}

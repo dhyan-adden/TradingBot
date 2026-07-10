@@ -1,0 +1,54 @@
+{
+  "mode": "premarket",
+  "live_orders_enabled": false,
+  "generated_by": "tradeloop.reasoning.claude",
+  "orders": [
+    {
+      "ticker": "CDSL",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 17,
+      "price": 1431.5,
+      "order_type": "LIMIT",
+      "hard_stop": 1378.2,
+      "target_1": 1502.57,
+      "target_2": 1538.11,
+      "max_entry_price": null,
+      "strategy_family": "20d_breakout",
+      "status": "APPROVED",
+      "reason": "Risk-approved: per-trade risk 906 INR (0.91%) <= 1.5% cap, position 24336 INR (24.3%) <= 25% cap, fills open slot 3 of 4. Clean 20d breakout, scanner 8.0 with volume; non-bank exposure. No news dependency."
+    },
+    {
+      "ticker": "DLF",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 36,
+      "price": 688.0,
+      "order_type": "LIMIT",
+      "hard_stop": 655.58,
+      "target_1": 731.22,
+      "target_2": 752.83,
+      "max_entry_price": null,
+      "strategy_family": "20d_breakout",
+      "status": "APPROVED",
+      "reason": "Risk-approved: per-trade risk 1167 INR (1.17%) <= 1.5% cap, position 24768 INR (24.8%) <= 25% cap, cash covers CDSL+DLF with no leverage, portfolio open risk 3396 INR (3.40%) <= 4% cap. Sector-diversifying 20d breakout vs the bank pair."
+    }
+  ],
+  "held": [
+    {
+      "ticker": "GRAVITA",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 13,
+      "price": 1852.0,
+      "order_type": "LIMIT",
+      "hard_stop": 1745.94,
+      "target_1": 1993.41,
+      "target_2": 2064.12,
+      "max_entry_price": null,
+      "strategy_family": "20d_breakout",
+      "status": "REJECTED",
+      "reason": "Held per risk gate and upheld: 2 held (HDFCBANK, SBIN) + CDSL + DLF already fills the 4-position cap - GRAVITA would be the 5th, a hard count no resize cures. Adding 1379 INR pushes portfolio open risk to 4.78% > 4% cap. Widest 5.7% stop and highest per-trade risk of the three - the correct one to drop."
+    }
+  ]
+}

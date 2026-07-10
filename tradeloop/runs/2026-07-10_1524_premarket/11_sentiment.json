@@ -1,0 +1,41 @@
+{
+  "evidence": [
+    "54c379004030",
+    "1caada445583",
+    "d2aaa38d2558",
+    "bf1da3200ea0",
+    "cc2075499b15",
+    "d1b9485d5e12",
+    "c415673b0d8e",
+    "e9421b045c6d",
+    "8a55bda0b6c4",
+    "f1b410f2d912",
+    "56318e8182d6",
+    "5b4b6e242b0d",
+    "616608ec27a9",
+    "8d9924d85f54",
+    "4706813989b5"
+  ],
+  "scores": [
+    {
+      "ticker": "TCS",
+      "sentiment_score": 0.3,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "HDFCBANK",
+      "sentiment_score": 0.6,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "INFY",
+      "sentiment_score": 0.2,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "SBIN",
+      "sentiment_score": -0.4,
+      "echo_chamber_flag": true
+    }
+  ]
+}
