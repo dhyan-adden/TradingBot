@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from tradeloop.lib.llm.routing import model_for
-
 
 @dataclass
 class StageView:
@@ -17,7 +15,8 @@ class StageView:
     model: str = ""
 
 
-# raw OpenRouter slug -> friendly label shown on the card
+# raw provider slug -> friendly label shown on the card. Legacy OpenRouter runs
+# still render with their true historical model; claude:* is formatted inline.
 MODEL_LABELS: dict[str, str] = {
     "minimax/minimax-m3": "MiniMax M3",
     "xiaomi/mimo-v2.5": "MiMo v2.5",
@@ -26,8 +25,14 @@ MODEL_LABELS: dict[str, str] = {
 }
 
 
-def model_label(stage: str) -> str:
-    slug = model_for(stage)
+def label_model(slug: str) -> str:
+    """Friendly label for the model that ACTUALLY ran a stage (read from the run's
+    llm_calls.jsonl), not a guess from the routing config - so the badge stays
+    honest across a backend swap. Empty when no call was recorded yet."""
+    if not slug:
+        return ""
+    if slug.startswith("claude:"):
+        return "Claude " + slug.split(":", 1)[1].capitalize()
     return MODEL_LABELS.get(slug, slug)
 
 
@@ -221,7 +226,7 @@ def _risk(raw: dict) -> tuple[str, list[str]]:
     return summary, points
 
 
-def render_decision(orders_json: dict) -> StageView:
+def render_decision(orders_json: dict, model: str = "") -> StageView:
     icon, title, role = _meta("41_pm_decision")
     orders = (orders_json or {}).get("orders") or []
     if not orders:
@@ -234,14 +239,14 @@ def render_decision(orders_json: dict) -> StageView:
         points = [f"{o.get('side','BUY')} {o.get('quantity','?')} {pretty_ticker(o.get('ticker',''))} "
                   f"@ {o.get('price','?')} - {o.get('reason','')}" for o in orders]
     return StageView(stage="41_pm_decision", icon=icon, title=title, role=role,
-                     summary=summary, points=points, model=model_label("41_pm_decision"))
+                     summary=summary, points=points, model=label_model(model))
 
 
 _ANALYSIS_BUILDERS["30_trade_plan"] = _trade_plan
 _ANALYSIS_BUILDERS["40_risk_report"] = _risk
 
 
-def render_stage(stage: str, raw: dict) -> StageView:
+def render_stage(stage: str, raw: dict, model: str = "") -> StageView:
     icon, title, role = _meta(stage)
     raw = raw or {}
     builder = _ANALYSIS_BUILDERS.get(stage)
@@ -251,4 +256,4 @@ def render_stage(stage: str, raw: dict) -> StageView:
         # Task 2 fills 30/40/41; until then, and for any unknown stage, a generic card.
         summary, points = "", []
     return StageView(stage=stage, icon=icon, title=title, role=role, summary=summary,
-                     points=points, model=model_label(stage))
+                     points=points, model=label_model(model))

@@ -90,6 +90,32 @@ def test_completed_intraday_run_is_not_still_running(tmp_path):
     assert "till running" not in runs[0].decision
 
 
+def test_stage_cards_show_the_model_that_actually_ran(tmp_path):
+    # regression: the dashboard labelled cards from the OpenRouter routing config,
+    # so a clean claude-backend run still showed "MiMo v2.5" / "MiniMax M3". The
+    # badge must come from the run's audit log = what really ran.
+    d = _make_run(tmp_path, "2026-07-10_1606_premarket", True)
+    (d / "22_debate.json").write_text(json.dumps({"names": []}))
+    (d / "llm_calls.jsonl").write_text(
+        json.dumps({"role": "10_news", "model": "claude:sonnet", "used_model": True}) + "\n"
+        + json.dumps({"role": "22_debate", "model": "claude:opus", "used_model": True}) + "\n")
+    out = read_run(d)
+    by_stage = {s["stage"]: s["model"] for s in out["stages"]}
+    assert by_stage["10_news"] == "Claude Sonnet"
+    assert by_stage["22_debate"] == "Claude Opus"
+
+
+def test_failed_attempt_does_not_override_the_model_that_succeeded(tmp_path):
+    # audit logs a failed try then the successful call for the same role; the badge
+    # must name the model that actually produced the output.
+    d = _make_run(tmp_path, "2026-07-10_1606_premarket", True)
+    (d / "llm_calls.jsonl").write_text(
+        json.dumps({"role": "10_news", "model": "claude:sonnet", "used_model": False}) + "\n"
+        + json.dumps({"role": "10_news", "model": "claude:opus", "used_model": True}) + "\n")
+    out = read_run(d)
+    assert {s["stage"]: s["model"] for s in out["stages"]}["10_news"] == "Claude Opus"
+
+
 def test_read_run_tolerates_missing_and_malformed_files(tmp_path):
     d = tmp_path / "2026-07-04_0900_premarket"
     d.mkdir()

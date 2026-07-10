@@ -34,6 +34,29 @@ def _mode(dir_name: str) -> str:
     return dir_name.rsplit("_", 1)[-1] if "_" in dir_name else ""
 
 
+def _stage_models(run_dir: Path) -> dict[str, str]:
+    """role -> model slug that ACTUALLY ran it, from the audit log. A successful
+    call overrides a prior failed attempt; on a fallback chain the last used model
+    wins. Empty when the run predates the audit log or it's unreadable."""
+    path = run_dir / "llm_calls.jsonl"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    models: dict[str, str] = {}
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        role, model = rec.get("role"), rec.get("model")
+        if not role or not model:
+            continue
+        if role not in models or rec.get("used_model"):
+            models[role] = model
+    return models
+
+
 def list_runs(runs_dir: Path) -> list[RunSummary]:
     runs_dir = Path(runs_dir)
     if not runs_dir.exists():
@@ -55,14 +78,15 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
 
 def read_run(run_dir: Path) -> dict:
     run_dir = Path(run_dir)
+    models = _stage_models(run_dir)
     stages = []
     for stage in STAGE_ORDER:
         raw = _load(run_dir / f"{stage}.json")
         if raw is None:
             continue  # not written yet
-        stages.append(asdict(render_stage(stage, raw)))
+        stages.append(asdict(render_stage(stage, raw, models.get(stage, ""))))
     orders = _load(run_dir / "orders.json") or {}
-    decision = asdict(render_decision(orders))
+    decision = asdict(render_decision(orders, models.get("41_pm_decision", "")))
     err_path = run_dir / "reasoning_error.txt"
     error = err_path.read_text(encoding="utf-8").strip() if err_path.exists() else ""
     if error:
