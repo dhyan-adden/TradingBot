@@ -85,8 +85,8 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
     min_turnover = float(uni.get("min_avg_daily_turnover_cr", 0)) * 1_00_00_000  # cr -> INR
     min_stop = float(uni.get("min_stop_distance_pct", 0)) / 100.0  # pct -> fraction
     pace = float(uni.get("pace_seconds", 0.0))
-    top_n = (max_setups_downstream if max_setups_downstream is not None
-             else int(uni.get("max_setups_downstream", 25)))
+    cfg_cap = uni.get("max_setups_downstream", 25)          # may be None (null) = uncapped
+    top_n = max_setups_downstream if max_setups_downstream is not None else cfg_cap
 
     all_items, macro = _collect_news(http, master, cfg)
     if source_health_root is not None:
@@ -120,7 +120,8 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
     setups.sort(
         key=lambda s: s.cleanliness_score + (NEWS_WEIGHT if s.ticker.strip().upper() in news_tickers else 0.0),
         reverse=True)
-    setups = setups[:top_n]
+    if top_n:  # None or 0 -> analyze the full tradeable scan (no pre-truncation)
+        setups = setups[:top_n]
 
     (run_dir / "01_news_raw.md").write_text(
         render_news_raw(stories, macro, news_available), encoding="utf-8")

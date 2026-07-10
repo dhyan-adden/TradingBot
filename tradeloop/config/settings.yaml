@@ -38,9 +38,11 @@ universe:
   exclude_segments: [SME, ETF_LEVERAGED]
   pace_seconds: 0.34          # delay between historical calls (~3 req/s Kite limit)
   max_symbols: 2500           # hard ceiling on symbols scanned
-  max_setups_downstream: 150  # prompt-size ceiling on setups fed to the analysts; set generous so
-                              # the AGGREGATE shortlister (news+mood+health+charts) is the real selector.
-                              # Full scan still saved to disk. Overflow beyond this is blended chart+news.
+  max_setups_downstream: null  # null (or 0) = analyze the FULL tradeable scan; the
+                               # aggregate shortlister is the selector over everything.
+                               # Full scan still saved to disk. Set a number to re-cap
+                               # (required if falling back to the OpenRouter backend,
+                               # whose small models cannot take the full block).
 
 shortlist:
   target_size: 12

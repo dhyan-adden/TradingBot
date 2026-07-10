@@ -53,3 +53,31 @@ def test_overflow_cut_blends_news_and_chart_not_news_override(tmp_path, monkeypa
 
     # blended scores: CLEAN_TOP 9.0, NEWSY 8.0, CLEAN_MID 7.0 -> top 2 kept
     assert {s.ticker for s in snap.setups} == {"CLEAN_TOP", "NEWSY"}
+
+
+def test_uncapped_keeps_all_setups_downstream(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    fake = [_setup("AAA", 9.0), _setup("BBB", 8.0), _setup("CCC", 7.0)]
+    monkeypatch.setattr(ingest, "scan_universe", lambda *a, **k: list(fake))
+    monkeypatch.setattr(ingest, "load_universe", lambda *a, **k: ["AAA", "BBB", "CCC"])
+    monkeypatch.setattr(ingest, "_collect_news", lambda *a, **k: ([], []))
+
+    snap = ingest.run(datetime(2026, 7, 6, 9, 0), run_dir=run_dir,
+                      kite_client=object(), config_dir=Path("tradeloop/config"),
+                      max_setups_downstream=0)  # 0 = no cap, analyze the full scan
+
+    assert {s.ticker for s in snap.setups} == {"AAA", "BBB", "CCC"}
+
+
+def test_cap_larger_than_scan_keeps_all(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    fake = [_setup("AAA", 9.0), _setup("BBB", 8.0)]
+    monkeypatch.setattr(ingest, "scan_universe", lambda *a, **k: list(fake))
+    monkeypatch.setattr(ingest, "load_universe", lambda *a, **k: ["AAA", "BBB"])
+    monkeypatch.setattr(ingest, "_collect_news", lambda *a, **k: ([], []))
+
+    snap = ingest.run(datetime(2026, 7, 6, 9, 0), run_dir=run_dir,
+                      kite_client=object(), config_dir=Path("tradeloop/config"),
+                      max_setups_downstream=10)
+
+    assert {s.ticker for s in snap.setups} == {"AAA", "BBB"}
