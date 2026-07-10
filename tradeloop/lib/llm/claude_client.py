@@ -23,10 +23,25 @@ from tradeloop.lib.llm.client import (
     build_system_content,
 )
 
+# Claude Code is agentic by default and always OFFERS built-in tools (Bash,
+# WebSearch, ...) regardless of allow/deny flags, which only gate execution. A
+# bounded stage that reaches for one emits a tool_use block and dies on
+# --max-turns (error_max_turns). Verified on a real cycle: 12_fundamentals shelled
+# out to Bash and failed 6/6. Force a pure JSON completion three ways: tell the
+# model it has no tools (so it answers directly), deny their execution + drop all
+# MCP as insurance, and allow a few turns so a stray tool-call still recovers.
+_NO_TOOLS_PREAMBLE = (
+    "CRITICAL: You have NO tools. Do NOT call Bash, web search, or any tool - "
+    "every tool call is denied and wastes your turn. Output ONLY the JSON object "
+    "specified below, nothing else.\n\n"
+)
+_DISALLOWED_TOOLS = ("Bash Read Write Edit MultiEdit NotebookEdit Glob Grep "
+                     "WebSearch WebFetch Task TodoWrite SlashCommand").split()
+
 
 class ClaudeStageClient:
     def __init__(self, audit_path: Path, cli: str = "claude",
-                 max_retries: int = 3, per_call_timeout: float = 120.0) -> None:
+                 max_retries: int = 3, per_call_timeout: float = 300.0) -> None:
         self.audit_path = Path(audit_path)
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
         self.cli = cli
@@ -37,10 +52,12 @@ class ClaudeStageClient:
                   schema: type[BaseModel], model: str | None = None) -> BaseModel:
         model = model or routing.claude_model_for(role)
         system_content = build_system_content(system, schema)
-        stdin_prompt = f"{system_content}\n\n{user}"   # to claude on stdin; no ARG_MAX
+        stdin_prompt = f"{_NO_TOOLS_PREAMBLE}{system_content}\n\n{user}"  # on stdin; no ARG_MAX
         prompt = f"{system}\n\n{user}"                 # recorded for provenance parity
         argv = [self.cli, "-p", "--model", model,
-                "--output-format", "json", "--max-turns", "1"]
+                "--strict-mcp-config",                 # no project MCP servers
+                "--disallowedTools", *_DISALLOWED_TOOLS,
+                "--output-format", "json", "--max-turns", "3"]
         # Force the subscription: strip any Anthropic API credentials so claude -p
         # can never silently bill the metered API. Subscription, or a loud failure.
         env = {k: v for k, v in os.environ.items()

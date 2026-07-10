@@ -136,6 +136,17 @@ def test_prompt_delivered_on_stdin_not_argv(tmp_path, monkeypatch):
     assert "--model" in calls["argv"] and "sonnet" in calls["argv"]
 
 
+def test_forces_toolless_single_shot(tmp_path, monkeypatch):
+    # Regression: claude -p is agentic and offers Bash/WebSearch; a stage that
+    # calls one dies on --max-turns (error_max_turns). Lock in the no-tools guards.
+    c, calls = _client(tmp_path, monkeypatch, [_completed(_envelope(_valid_shortlist_text()))])
+    c.call_json("12_fundamentals", "s", "u", Shortlist, model="sonnet")
+    assert "--strict-mcp-config" in calls["argv"]            # no project MCP
+    assert "--disallowedTools" in calls["argv"]              # tool execution denied
+    assert "Bash" in calls["argv"]                           # incl. the Bash tool
+    assert "no tools" in calls["inputs"][0].lower()          # instruction on stdin
+
+
 def test_subprocess_env_scrubs_anthropic_api_key(tmp_path, monkeypatch):
     # Airtight subscription guarantee: even if an API key is in the parent env,
     # the claude -p subprocess must NOT see it, so it can only use the sub.
