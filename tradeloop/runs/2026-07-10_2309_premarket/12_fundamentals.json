@@ -1,0 +1,75 @@
+{
+  "evidence": [
+    "d1b9485d5e12",
+    "e9421b045c6d",
+    "c415673b0d8e",
+    "5376a28e2add",
+    "2c03d9dae4d2",
+    "297a9fb9ab86",
+    "8d9924d85f54",
+    "4706813989b5",
+    "e300d763e6f7",
+    "be192d61792a",
+    "de6506692df3",
+    "5b4b6e242b0d",
+    "d0eeedf1f68c",
+    "45e88e8bf567",
+    "8a55bda0b6c4",
+    "56318e8182d6"
+  ],
+  "tags": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "e9421b045c6d",
+        "c415673b0d8e",
+        "5376a28e2add"
+      ],
+      "ticker": "HDFCBANK",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "2c03d9dae4d2",
+        "297a9fb9ab86",
+        "8d9924d85f54",
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "tag": "yellow",
+      "red_flags": [
+        "Unreviewed NSE 'Restructuring' XBRL+PDF filing dated 2026-07-10 on a current holding - content not yet assessed, treat as pending disclosure risk despite strong core metrics (13% loan CAGR, 14% ROE cited)."
+      ]
+    },
+    {
+      "evidence": [
+        "e300d763e6f7",
+        "be192d61792a",
+        "de6506692df3",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "TCS",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "d0eeedf1f68c",
+        "45e88e8bf567"
+      ],
+      "ticker": "RELIANCE",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "56318e8182d6"
+      ],
+      "ticker": "INFY",
+      "tag": "green",
+      "red_flags": []
+    }
+  ]
+}

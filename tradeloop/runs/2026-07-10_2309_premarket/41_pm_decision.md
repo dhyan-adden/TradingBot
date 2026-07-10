@@ -1,0 +1,56 @@
+# 41_pm_decision
+
+```json
+{
+  "evidence": [],
+  "orders": [
+    {
+      "ticker": "DLF",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 36,
+      "price": 688.0,
+      "order_type": "LIMIT",
+      "hard_stop": 655.58,
+      "target_1": 731.22,
+      "target_2": 752.83,
+      "max_entry_price": 688.0,
+      "strategy_family": "20d_breakout",
+      "status": "NEW",
+      "reason": "Risk-approved: per-trade risk 1.17% (36x32.42), position 24.8% of equity, real-estate sleeve no overlap with bank book. Highest-conviction fresh long (6.0); DLF+CDSL hold total open risk 3.40% and fill exactly 4 concurrent slots. No conservative reason to trim; passed through at risk size."
+    },
+    {
+      "ticker": "CDSL",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 17,
+      "price": 1431.5,
+      "order_type": "LIMIT",
+      "hard_stop": 1378.2,
+      "target_1": 1502.57,
+      "target_2": 1538.11,
+      "max_entry_price": 1431.5,
+      "strategy_family": "20d_breakout",
+      "status": "NEW",
+      "reason": "Risk-approved: per-trade risk 0.91% (17x53.30), position 24.3% of equity, sole capital-markets name. DLF+CDSL cost 49104 within 51098 cash, long-only CNC no leverage. Passed through at risk size."
+    }
+  ],
+  "held": [
+    {
+      "ticker": "GODREJIND",
+      "side": "BUY",
+      "product": "CNC",
+      "quantity": 17,
+      "price": 1395.0,
+      "order_type": "LIMIT",
+      "hard_stop": 1321.69,
+      "target_1": 1492.74,
+      "target_2": 1541.61,
+      "max_entry_price": 1395.0,
+      "strategy_family": "20d_breakout",
+      "status": "HELD",
+      "reason": "Held per risk veto: 2 existing (HDFCBANK, SBIN)+DLF+CDSL already fill the 4-position concurrency cap; adding it lifts total open risk to 4.64% over the 4% portfolio cap and the three new longs cost 72819 > 51098 cash (would require prohibited leverage). Lowest conviction of the batch (5.0). PM concurs - can only be more conservative."
+    }
+  ]
+}
+```

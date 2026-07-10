@@ -1,0 +1,122 @@
+{
+  "evidence": [
+    "2c03d9dae4d2",
+    "297a9fb9ab86",
+    "8d9924d85f54",
+    "4706813989b5",
+    "e300d763e6f7",
+    "be192d61792a",
+    "de6506692df3",
+    "5b4b6e242b0d",
+    "d1b9485d5e12",
+    "e9421b045c6d",
+    "c415673b0d8e",
+    "5376a28e2add",
+    "d0eeedf1f68c",
+    "45e88e8bf567",
+    "8a55bda0b6c4",
+    "56318e8182d6"
+  ],
+  "names": [
+    {
+      "evidence": [],
+      "ticker": "DLF",
+      "conviction": 6.0,
+      "verdict": "tradeable"
+    },
+    {
+      "evidence": [],
+      "ticker": "CDSL",
+      "conviction": 6.0,
+      "verdict": "tradeable"
+    },
+    {
+      "evidence": [],
+      "ticker": "GODREJIND",
+      "conviction": 5.0,
+      "verdict": "tradeable"
+    },
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "conviction": 5.0,
+      "verdict": "tradeable"
+    },
+    {
+      "evidence": [
+        "2c03d9dae4d2",
+        "297a9fb9ab86",
+        "8d9924d85f54",
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "conviction": 5.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "e9421b045c6d",
+        "c415673b0d8e",
+        "5376a28e2add"
+      ],
+      "ticker": "HDFCBANK",
+      "conviction": 5.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "e300d763e6f7",
+        "be192d61792a",
+        "de6506692df3",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "TCS",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "56318e8182d6",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "INFY",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [],
+      "ticker": "BRIGADE",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [],
+      "ticker": "SOBHA",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [],
+      "ticker": "GRAVITA",
+      "conviction": 4.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [
+        "d0eeedf1f68c",
+        "45e88e8bf567"
+      ],
+      "ticker": "RELIANCE",
+      "conviction": 3.0,
+      "verdict": "watch"
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "conviction": 3.0,
+      "verdict": "watch"
+    }
+  ]
+}

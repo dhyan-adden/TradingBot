@@ -1,0 +1,148 @@
+# 14_shortlist
+
+```json
+{
+  "evidence": [],
+  "candidates": [
+    {
+      "evidence": [
+        "2c03d9dae4d2",
+        "297a9fb9ab86",
+        "8d9924d85f54",
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "catalyst_type": "regulatory_filing",
+      "source_track": "tier_a",
+      "composite_score": 5.5,
+      "thesis": "Existing holding +4.2% this week on 13% loan CAGR/14% ROE, but the 2026-07-10 NSE Restructuring filing is unreviewed - hold at current stop 1015.40, no add until filing content is read.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [
+        "e300d763e6f7",
+        "be192d61792a",
+        "de6506692df3",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "TCS",
+      "catalyst_type": "earnings_beat",
+      "source_track": "tier_a",
+      "composite_score": 5.0,
+      "thesis": "Q1 FY27 profit +5% YoY drove a broad Sensex/Nifty rally and hiring reportedly resumed, but zero scanner setup - watch for a pullback entry, no confirmed trigger yet.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "e9421b045c6d",
+        "c415673b0d8e",
+        "5376a28e2add"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst_type": "brokerage_upgrade",
+      "source_track": "tier_b",
+      "composite_score": 6.5,
+      "thesis": "ICICI Sec Buy (target 1850) and Nomura top pick ahead of the Jul 18 Q1 print, plus a 5bps MCLR cut Jul 7 - hold current position into results, no fresh chart-confirmed add trigger.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [
+        "d0eeedf1f68c",
+        "45e88e8bf567"
+      ],
+      "ticker": "RELIANCE",
+      "catalyst_type": "earnings_calendar",
+      "source_track": "tier_a",
+      "composite_score": 3.5,
+      "thesis": "RIL and Jio Financial set their Q1 FY27 board-meeting dates - a calendar catalyst only, no result yet and no scan setup; watch into the print.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "56318e8182d6",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "INFY",
+      "catalyst_type": "brokerage_upgrade",
+      "source_track": "tier_b",
+      "composite_score": 4.0,
+      "thesis": "KR Choksey Accumulate (target 1531) and ADR strength post-TCS beat are offset by Nifty IT falling on Fed-minutes rate jitters; no scan confirmation ahead of INFY's own Q1 print.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "CDSL",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 1431.50/stop 1378.20, targets 1502.57/1538.11 - clean liquid setup, no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "DLF",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 688.00/stop 655.58, targets 731.22/752.83.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "BRIGADE",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 575.00/stop 537.15, targets 625.46/650.70.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "SOBHA",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 1523.00/stop 1451.06, targets 1618.91/1666.87.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "GODREJIND",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 1395.00/stop 1321.69, targets 1492.74/1541.61.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "GRAVITA",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 1852.00/stop 1745.94, targets 1993.41/2064.12.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 8.0,
+      "thesis": "20d breakout with volume confirmation, entry 1007.00/stop 970.71, targets 1055.39/1079.59.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "catalyst_type": "technical_breakout",
+      "source_track": "quiet",
+      "composite_score": 7.5,
+      "thesis": "Top-ranked 20d breakout, entry 5389.00/stop 5123.45, targets 5743.07/5920.11 - volume not above threshold, confirm on volume before sizing.",
+      "horizon": "5-20 days"
+    }
+  ]
+}
+```
