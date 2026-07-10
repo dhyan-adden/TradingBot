@@ -138,6 +138,10 @@ Fail loud, never silent: a stage that cannot produce schema-valid JSON after ret
 
 Subprocess hygiene: parse stdout only, capture stderr separately, and never log the prompt outside the provenance `CallRecord`.
 
+Subscription-only guarantee: `ClaudeStageClient` strips `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` from the `claude -p` subprocess environment, so the call can only ever run on the subscription; if a key were present in the parent environment it would otherwise make Claude Code silently bill the metered API.
+The result is subscription or a loud failure, never a silent API charge.
+Verified 2026-07-10: no Anthropic key in the shell, `.env`, or `~/.claude` settings, so the current machine already uses the subscription.
+
 Ultimate net: the propose/approve split means no stage output can reach the broker without passing the deterministic gates and your explicit approval, so even a bad stage cannot route a trade.
 
 ## Testing

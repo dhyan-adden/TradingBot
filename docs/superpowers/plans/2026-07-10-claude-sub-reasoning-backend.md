@@ -277,10 +277,11 @@ def _completed(stdout, code=0, stderr=""):
 
 def _client(tmp_path, monkeypatch, results):
     """results: list of CompletedProcess or Exception, played in sequence."""
-    calls = {"n": 0, "inputs": [], "argv": None}
+    calls = {"n": 0, "inputs": [], "argv": None, "env": None}
 
-    def fake_run(argv, input=None, capture_output=None, text=None, timeout=None):
+    def fake_run(argv, input=None, capture_output=None, text=None, timeout=None, env=None):
         calls["argv"] = argv
+        calls["env"] = env
         calls["inputs"].append(input)
         idx = calls["n"]
         calls["n"] += 1
@@ -375,6 +376,16 @@ def test_prompt_delivered_on_stdin_not_argv(tmp_path, monkeypatch):
     assert big_user in calls["inputs"][0]                    # prompt went to stdin
     assert big_user not in " ".join(calls["argv"])           # NOT in argv (no ARG_MAX)
     assert "--model" in calls["argv"] and "sonnet" in calls["argv"]
+
+
+def test_subprocess_env_scrubs_anthropic_api_key(tmp_path, monkeypatch):
+    # Airtight subscription guarantee: even if an API key is in the parent env,
+    # the claude -p subprocess must NOT see it, so it can only use the sub.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-be-stripped")
+    c, calls = _client(tmp_path, monkeypatch, [_completed(_envelope(_valid_shortlist_text()))])
+    c.call_json("10_news", "s", "u", Shortlist, model="sonnet")
+    assert "ANTHROPIC_API_KEY" not in (calls["env"] or {})   # forced onto the subscription
+    assert "PATH" in (calls["env"] or {})                    # but the rest of the env survives
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -399,6 +410,7 @@ so the audit log is byte-compatible with the OpenRouter path.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -429,12 +441,16 @@ class ClaudeStageClient:
         prompt = f"{system}\n\n{user}"                 # recorded for provenance parity
         argv = [self.cli, "-p", "--model", model,
                 "--output-format", "json", "--max-turns", "1"]
+        # Force the subscription: strip any Anthropic API credentials so claude -p
+        # can never silently bill the metered API. Subscription, or a loud failure.
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
 
         last_exc: Exception | None = None
         for _ in range(self.max_retries):
             try:
                 proc = subprocess.run(argv, input=stdin_prompt, capture_output=True,
-                                      text=True, timeout=self.per_call_timeout)
+                                      text=True, timeout=self.per_call_timeout, env=env)
                 if proc.returncode != 0:
                     raise RuntimeError(
                         f"claude -p exit {proc.returncode}: {(proc.stderr or '')[:200]}")
