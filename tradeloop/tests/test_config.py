@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_settings_yaml_has_phase0_knobs() -> None:
     data = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
     assert data["capital"]["max_total_deployed_pct"] == 90
-    assert data["cycle_timeout_seconds"] == 1200
+    assert data["cycle_timeout_seconds"] == 1800
 
 
 from tradeloop.lib.config import load_settings, risk_caps
@@ -23,7 +23,7 @@ def test_load_settings_and_risk_caps_mapping() -> None:
     assert settings.max_sector_pct == 50  # raised 2026-07-07: user-approved two-bank entry
     assert settings.daily_drawdown_pct == 3
     assert settings.promotion_gates["min_paper_trades"] == 40
-    assert settings.cycle_timeout_seconds == 1200
+    assert settings.cycle_timeout_seconds == 1800
 
     caps = risk_caps(settings, ["RELIANCE", "TCS"], capital_inr=250000.0)
     assert caps.capital_inr == 250000.0
