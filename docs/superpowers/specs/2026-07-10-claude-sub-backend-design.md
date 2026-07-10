@@ -142,23 +142,42 @@ Ultimate net: the propose/approve split means no stage output can reach the brok
 
 ## Testing
 
-Test plan follows the money-path standard: normal, edge, and failure branches, plus an E2E smoke as close to production as possible.
+Philosophy (project standard): a unit test earns its place only when it exhaustively covers a bounded condition space, meaning normal plus every edge plus every failure branch.
+A shallow test written for a green count is worse than none.
+Where behaviour is not a bounded surface, the weight sits on the end-to-end run judged from the user's output perspective, meaning what a person actually sees at the terminal and dashboard and would act on.
 
-Unit (`tests/test_claude_client.py`, mock `subprocess.run`):
+Exhaustive unit, `ClaudeStageClient` (`tests/test_claude_client.py`, mock `subprocess.run`).
+This is the one new component with a finite, enumerable failure surface, so it is covered completely:
 
-- Normal: a valid envelope with schema-conforming JSON returns the validated model and writes one `CallRecord`.
-- Edge: prose-wrapped JSON is still extracted and validated.
-- Failure: bad JSON then good JSON retries and succeeds; always-bad JSON raises `LLMValidationError`; hollow `{}` is rejected and triggers retry; nonzero exit and subprocess timeout retry then raise.
+- valid JSON envelope produces the validated model plus one `CallRecord` with the mapped provenance fields
+- `result` fenced in a ```json block is extracted and validated
+- prose around the JSON is recovered by brace extraction
+- hollow `{}` is rejected and retry engages
+- empty or whitespace `result` is treated as failure and retries
+- schema-mismatched JSON fails validation and retries
+- bad-then-good across retries succeeds
+- always-bad through max retries raises `LLMValidationError`
+- subprocess nonzero exit retries then raises
+- per-call timeout (`subprocess.TimeoutExpired`) retries then raises
+- a large prompt is delivered on stdin, not argv, and the call still succeeds
 
-Regression: `test_cycle_guards.py`, `test_reasoning_wiring.py`, `test_llm_client.py`, `test_llm_routing.py`, `test_model_routing_doc.py` keep passing after the `_run_reasoning_dag` extraction.
+Exhaustive unit, setup cap (extend `tests/data/test_ingest_universe.py`), also a bounded surface:
 
-Money-path: with a stub `ClaudeStageClient` returning a deliberately lowballed trade quantity, `orders.json` on the claude backend still shows the deterministic size (`_size_trade_plan` runs in the shared loop).
-This proves the sizing gap identified in the current claude path is closed.
+- numeric cap smaller than the scan truncates to the cap (existing behaviour preserved)
+- `null` cap lets every scanned setup reach `02_setups_raw.md` with no truncation
+- cap larger than the scan keeps all setups with no error
 
-Setup cap (extend `tests/data/test_ingest_universe.py`): a scan larger than a numeric `max_setups_downstream` is still truncated to it (existing behaviour), and with the cap set to `null` every scanned setup reaches `02_setups_raw.md` with no truncation.
+Regression: `test_cycle_guards.py`, `test_reasoning_wiring.py`, `test_llm_client.py`, `test_llm_routing.py`, `test_model_routing_doc.py` keep passing after the `_run_reasoning_dag` extraction, proving the change swapped transport, not behaviour.
 
-E2E smoke: run `orchestrator premarket --backend claude` against a prepared run directory with the real `claude -p`.
-Assert `orders.json` is the Python dict shape, `llm_calls.jsonl` provenance shows only `claude:*` models and zero OpenRouter models, deterministic sizing was applied, and the evidence and grounding gates pass.
+Primary weight, E2E from the user's output perspective.
+Run `orchestrator premarket --backend claude` against a prepared run directory with the real `claude -p`, then judge it the way you would at the terminal and dashboard:
+
+- the status line reads `tradeloop_cycle=AWAITING_APPROVAL mode=premarket orders=N run_dir=...`
+- `orders.json` is the Python dict shape, and the proposed orders are sensible, correctly sized, and price-grounded
+- `llm_calls.jsonl` shows only `claude:*` models across every stage and zero OpenRouter models
+- the full setup scan, not a truncated 150, reached `02_setups_raw.md`
+- the evidence and grounding gates passed, and the dashboard renders the run truthfully, not as a false confident hold
+- money-path check, here rather than as a stub: a stage that returns a lowballed quantity still routes at the deterministic size, because `_size_trade_plan` runs in the shared loop
 
 ## Rollback
 
