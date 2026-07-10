@@ -2,6 +2,7 @@
 import argparse
 import importlib
 import json as _json
+import subprocess
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -21,7 +22,20 @@ from tradeloop.lib.util.holidays import is_nse_holiday
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def verify(mode: str, check_live_readiness: bool = False) -> int:
+def claude_authenticated(cli: str = "claude", timeout: float = 15.0) -> bool:
+    """True when the claude CLI answers a trivial prompt (a proxy for a live
+    subscription login on this machine). Any nonzero exit, error, or timeout
+    reads as not-authenticated so the cycle fails loudly at prepare, not mid-DAG."""
+    try:
+        proc = subprocess.run(
+            [cli, "-p", "--model", "haiku", "--max-turns", "1"],
+            input="reply with OK", capture_output=True, text=True, timeout=timeout)
+        return proc.returncode == 0
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
+def verify(mode: str, check_live_readiness: bool = False, backend: str | None = None) -> int:
     settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8")) or {}
     if mode not in settings.get("modes", {}):
         raise ValueError(f"unknown mode: {mode}")
@@ -36,6 +50,9 @@ def verify(mode: str, check_live_readiness: bool = False) -> int:
         if not live_promotion_ready(ROOT, settings):
             print("tradeloop_setup=LIVE_NOT_READY")
             return 2
+    if backend == "claude" and not claude_authenticated():
+        print("tradeloop_setup=CLAUDE_AUTH_MISSING")
+        return 4
     print(f"tradeloop_setup=OK mode={mode}")
     return 0
 
@@ -85,10 +102,11 @@ def main() -> int:
     parser.add_argument("--mode", default="premarket", choices=["premarket", "intraday", "postclose", "adhoc"])
     parser.add_argument("--check-live-readiness", action="store_true")
     parser.add_argument("--health", action="store_true")
+    parser.add_argument("--backend", default=None, choices=["openrouter", "claude"])
     args = parser.parse_args()
     if args.health:
         return health(ROOT)
-    return verify(args.mode, args.check_live_readiness)
+    return verify(args.mode, args.check_live_readiness, backend=args.backend)
 
 
 if __name__ == "__main__":
