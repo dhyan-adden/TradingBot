@@ -1,0 +1,34 @@
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [],
+      "ticker": "RSL",
+      "claim": "Highest composite score (8.5) among all candidates; technical breakout on 20-day high with strong volume provides clean risk-reward for 1-5 day horizon."
+    },
+    {
+      "evidence": [],
+      "ticker": "ALKYLAMINE",
+      "claim": "Second-highest composite score (8.0); high-conviction 20-day breakout with above-threshold volume confirms strong momentum for a short-term trade."
+    },
+    {
+      "evidence": [
+        "fbb28dd6802a"
+      ],
+      "ticker": "INFY",
+      "claim": "Sector sentiment is being driven by positive mutual fund buying linked to TCS Q1 results, with a short-term buy recommendation supporting a bounce [fbb28dd6802a]."
+    },
+    {
+      "evidence": [
+        "df3ff1e57709"
+      ],
+      "ticker": "TCS",
+      "claim": "Pending Q1 FY27 results act as a key sector catalyst for the entire IT space, potentially lifting sentiment for peers like INFY [df3ff1e57709]."
+    },
+    {
+      "evidence": [],
+      "ticker": "HDFCBANK",
+      "claim": "Fundamentally strong, green-tagged large-cap with no red flags, offering stable exposure and a longer 5-20 day horizon for a low-risk position."
+    }
+  ]
+}

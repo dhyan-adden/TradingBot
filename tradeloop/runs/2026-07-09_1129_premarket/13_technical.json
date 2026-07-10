@@ -1,0 +1,86 @@
+{
+  "evidence": [],
+  "setups": [
+    {
+      "evidence": [
+        "f7b2e5c1044f",
+        "df3ff1e57709",
+        "3075facb765c"
+      ],
+      "ticker": "TCS",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Q1 FY27 results pending; stock down 2% ahead of earnings. Avoid entry until results are digested. Sector read-through catalyst."
+    },
+    {
+      "evidence": [
+        "fbb28dd6802a",
+        "3c40d21cc5f2"
+      ],
+      "ticker": "INFY",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Sector sentiment tied to TCS Q1; watch for earnings read-through before entry. Short-term buy rating but gated on TCS results."
+    },
+    {
+      "evidence": [
+        "e27daa4a8271",
+        "c6a837b1390f",
+        "143996054f3b"
+      ],
+      "ticker": "RELIANCE",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Corporate board changes/committee meetings; no strong bullish catalyst. Avoid fresh long until price reclaims 1365-1389 and holds."
+    },
+    {
+      "evidence": [],
+      "ticker": "RSL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout with score 10.0, strong volume. Entry 131.47, stop 126.59. Attractive risk-reward."
+    },
+    {
+      "evidence": [],
+      "ticker": "ALKYLAMINE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 8.0 with above-threshold volume. Entry 1951.20, stop 1835.51. Strong breakout."
+    },
+    {
+      "evidence": [],
+      "ticker": "EIHOTEL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 8.0 above-threshold volume. Entry 337.00, stop 320.58. Hospitality sector strength."
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 8.0 above-threshold volume. Entry 433.95, stop 406.34. Strong momentum."
+    },
+    {
+      "evidence": [],
+      "ticker": "HAPPSTMNDS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 8.0 above-threshold volume. Entry 363.80, stop 347.14. Digital tech momentum."
+    },
+    {
+      "evidence": [],
+      "ticker": "SHAREINDIA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 8.0 above-threshold volume. Entry 179.00, stop 167.66. Financial services breakout."
+    },
+    {
+      "evidence": [],
+      "ticker": "BHARTIARTL",
+      "classification": "bullish_continuation",
+      "news_confirmed": false,
+      "notes": "20d_breakout score 6.0 normal volume. Entry 1953.20, stop 1896.31. Telecom strength; hold if long."
+    }
+  ]
+}

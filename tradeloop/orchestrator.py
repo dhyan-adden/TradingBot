@@ -125,6 +125,25 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
     raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
 
 
+def _canonicalize_claude_orders(run_dir: Path, mode: str) -> None:
+    """Normalise the Claude backend's orders.json into the canonical OrdersFile
+    DICT the OpenRouter path emits. The subagents write the legacy bare-array shape
+    (output_schemas.md) or leave prepare's `[]` placeholder, but the dashboard needs
+    the dict: a bare `[]` reads as 'still running - no decision yet', and a bare
+    `[{...}]` crashes render_decision's `.get("orders")` (a list has no .get). Python
+    owns this serialisation, not the LLM - same principle as _run_reasoning_openrouter.
+    load_orders already tolerates both shapes, so round-tripping through it IS the fix.
+    Malformed output is left as-is for run_cycle's load_orders gate to reject loudly."""
+    path = run_dir / "orders.json"
+    try:
+        of = load_orders(path)
+    except Exception:
+        return  # malformed/missing -> run_cycle's ORDERS_INVALID gate handles it
+    of.mode = mode
+    of.generated_by = "tradeloop.reasoning.claude"
+    path.write_text(of.model_dump_json(indent=2), encoding="utf-8")
+
+
 def _run_reasoning_claude(run_dir: Path, mode: str, timeout: int) -> int:
     """Reason via the Claude Code subagent backend (your subscription). The Opus
     master orchestrator (run_cycle.sh claude path) dispatches each team as a
@@ -137,6 +156,8 @@ def _run_reasoning_claude(run_dir: Path, mode: str, timeout: int) -> int:
                               cwd=str(ROOT.parent), timeout=timeout)
     except subprocess.TimeoutExpired:
         return -1
+    if proc.returncode == 0:
+        _canonicalize_claude_orders(run_dir, mode)  # dashboard + router read one shape
     return proc.returncode
 
 
