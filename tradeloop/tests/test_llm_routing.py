@@ -38,3 +38,23 @@ def test_news_and_technical_use_flash():
 def test_unknown_stage_falls_back_to_default():
     assert routing.model_for("99_unknown") == routing.DEFAULT_MODEL
     assert routing.DEFAULT_MODEL in APPROVED
+
+
+def test_claude_model_for_matches_tiering():
+    assert routing.claude_model_for("11_sentiment") == "haiku"
+    assert routing.claude_model_for("05_adhoc_intake") == "haiku"
+    assert routing.claude_model_for("10_news") == "sonnet"
+    assert routing.claude_model_for("50_post_trade") == "sonnet"
+    assert routing.claude_model_for("22_debate") == "opus"
+    assert routing.claude_model_for("30_trade_plan") == "opus"
+    assert routing.claude_model_for("40_risk_report") == "opus"
+    assert routing.claude_model_for("41_pm_decision") == "opus"
+
+
+def test_claude_model_for_defaults_to_sonnet_for_unknown_stage():
+    assert routing.claude_model_for("99_unknown") == "sonnet"
+
+
+def test_every_openrouter_stage_has_a_claude_tier():
+    for stage in routing.STAGE_MODELS:
+        assert stage in routing.CLAUDE_STAGE_MODELS, f"{stage} missing a claude tier"
