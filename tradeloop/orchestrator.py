@@ -3,7 +3,6 @@ import dataclasses
 import fcntl
 import json
 import os
-import subprocess
 import time
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -21,6 +20,7 @@ from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.llm import stages
+from tradeloop.lib.llm.claude_client import ClaudeStageClient
 from tradeloop.lib.llm.client import LLMClient
 from tradeloop.lib.llm.schemas import PMDecision, TradePlan
 from tradeloop.lib.risk.checks import RiskState
@@ -103,71 +103,33 @@ def _size_trade_plan(run_dir: Path, settings) -> None:
 
 def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
                    client=None, settings=None) -> int:
-    """Dispatch reasoning to the selected backend, then return an int exit code
-    matching P0's contract: -1 on cycle-timeout (run_cycle -> TIMEOUT, exit 1),
-    0 on success, nonzero on failure.
+    """Dispatch reasoning to the selected backend's client, then run the one
+    deterministic DAG. Both backends write a schema-valid orders.json; the route
+    phase validates + gates it identically, so risk controls are backend-independent.
 
-    Both backends write a schema-valid orders.json into run_dir; the separate
-    route phase then validates + gates it identically (evaluate() on every
-    order), so the risk controls are backend-independent.
+    - "openrouter" -> LLMClient (httpx -> OpenRouter): dormant fallback.
+    - "claude"     -> ClaudeStageClient (claude -p per stage on your subscription).
 
-    - "openrouter" -> the in-process OpenRouter DAG (the P1 engine): cheap,
-                      zero-tool models, full provenance audit. Default - the
-                      "propose" half of the propose/approve split cycle.
-    - "claude"     -> Claude Code subagents on your subscription (Opus master +
-                      Haiku/Sonnet/Opus teams), for adhoc/research runs.
+    Returns match P0's contract: -1 on cycle-timeout, 0 on success, nonzero on failure.
     """
     backend = (backend or "openrouter").lower()
-    if backend == "claude":
-        return _run_reasoning_claude(run_dir, mode, timeout)
-    if backend == "openrouter":
-        return _run_reasoning_openrouter(run_dir, mode, timeout, client, settings)
-    raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
+    if backend not in ("openrouter", "claude"):
+        raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
+    if client is None:
+        client = (ClaudeStageClient(audit_path=run_dir / "llm_calls.jsonl")
+                  if backend == "claude"
+                  else LLMClient(audit_path=run_dir / "llm_calls.jsonl"))
+    generated_by = ("tradeloop.reasoning.claude" if backend == "claude"
+                    else "tradeloop.reasoning.p1")
+    return _run_reasoning_dag(run_dir, mode, timeout, client, settings, generated_by)
 
 
-def _canonicalize_claude_orders(run_dir: Path, mode: str) -> None:
-    """Normalise the Claude backend's orders.json into the canonical OrdersFile
-    DICT the OpenRouter path emits. The subagents write the legacy bare-array shape
-    (output_schemas.md) or leave prepare's `[]` placeholder, but the dashboard needs
-    the dict: a bare `[]` reads as 'still running - no decision yet', and a bare
-    `[{...}]` crashes render_decision's `.get("orders")` (a list has no .get). Python
-    owns this serialisation, not the LLM - same principle as _run_reasoning_openrouter.
-    load_orders already tolerates both shapes, so round-tripping through it IS the fix.
-    Malformed output is left as-is for run_cycle's load_orders gate to reject loudly."""
-    path = run_dir / "orders.json"
-    try:
-        of = load_orders(path)
-    except Exception:
-        return  # malformed/missing -> run_cycle's ORDERS_INVALID gate handles it
-    of.mode = mode
-    of.generated_by = "tradeloop.reasoning.claude"
-    path.write_text(of.model_dump_json(indent=2), encoding="utf-8")
-
-
-def _run_reasoning_claude(run_dir: Path, mode: str, timeout: int) -> int:
-    """Reason via the Claude Code subagent backend (your subscription). The Opus
-    master orchestrator (run_cycle.sh claude path) dispatches each team as a
-    Claude Code subagent, writing artifacts + orders.json into the pinned
-    run_dir. No OpenRouter. -1 on timeout, else the child exit code."""
-    script = ROOT / "scripts" / "run_cycle.sh"
-    env = dict(os.environ, TRADELOOP_AGENT="claude", TRADELOOP_RUN_DIR=str(run_dir))
-    try:
-        proc = subprocess.run(["bash", str(script), mode], env=env,
-                              cwd=str(ROOT.parent), timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return -1
-    if proc.returncode == 0:
-        _canonicalize_claude_orders(run_dir, mode)  # dashboard + router read one shape
-    return proc.returncode
-
-
-def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int,
-                              client=None, settings=None) -> int:
-    """In-process OpenRouter DAG: each stage returns a validated pydantic form
-    written to run_dir/<stage>.json; Python - not the LLM - then serialises
-    orders.json from the validated PMDecision (route_orders_file reads the
-    OrdersFile shape and runs evaluate() on every order)."""
-    client = client or LLMClient(audit_path=run_dir / "llm_calls.jsonl")
+def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
+                       settings=None, generated_by: str = "tradeloop.reasoning.p1") -> int:
+    """Deterministic DAG: each stage returns a validated pydantic form written to
+    run_dir/<stage>.json; Python - not the LLM - then serialises orders.json from
+    the validated PMDecision. Client-agnostic: OpenRouter or Claude behind the same
+    loop (route_orders_file reads the OrdersFile shape and runs evaluate() on every order)."""
     deadline = time.monotonic() + timeout  # bound the DAG exactly as P0's subprocess timeout= did
 
     dag = list(stages.DAG)
@@ -204,7 +166,7 @@ def _run_reasoning_openrouter(run_dir: Path, mode: str, timeout: int,
     orders_file = {
         "mode": mode,
         "live_orders_enabled": False,      # paper default; live only past promotion gate
-        "generated_by": "tradeloop.reasoning.p1",
+        "generated_by": generated_by,
         "orders": [o.model_dump() for o in orders],
         "held": [o.model_dump() for o in held],
     }
