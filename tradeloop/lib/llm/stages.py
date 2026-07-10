@@ -9,7 +9,6 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from tradeloop.lib.llm import routing
 from tradeloop.lib.llm.client import LLMValidationError
 from tradeloop.lib.llm.schemas import SCHEMA_FOR_STAGE
 
@@ -83,11 +82,10 @@ def run_stage(name: str, run_dir: Path, client: SupportsCallJson) -> BaseModel:
     system = _prompt_text(name)  # raises FileNotFoundError first for unknown stages
     schema = SCHEMA_FOR_STAGE[name]
     user = _user_message(name, run_dir)
-    model = routing.model_for(name)
     try:
-        result = client.call_json(name, system, user, schema, model)
+        result = client.call_json(name, system, user, schema)
     except LLMValidationError:
-        result = client.call_json(name, system, user, schema, model)  # one retry
+        result = client.call_json(name, system, user, schema)  # one retry
     (run_dir / f"{name}.json").write_text(
         result.model_dump_json(indent=2), encoding="utf-8")
     (run_dir / f"{name}.md").write_text(

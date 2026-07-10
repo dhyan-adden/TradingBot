@@ -19,6 +19,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from tradeloop.lib.llm import routing
+
 
 class LLMConfigError(RuntimeError):
     """Provider disabled or API key missing."""
@@ -41,6 +43,29 @@ class CallRecord:
     total_tokens: int
     used_model: bool
     reason: str = ""
+
+
+def build_system_content(system: str, schema: type[BaseModel]) -> str:
+    """Schema-pinned system prompt shared by every stage transport.
+
+    Without the exact JSON Schema the model invents prose keys that never match
+    the pydantic fields, so extra='ignore' silently defaults every field and the
+    object comes back hollow. Shared by LLMClient (OpenRouter) and
+    ClaudeStageClient (subscription) so both pin field names identically.
+    """
+    schema_hint = json.dumps(schema.model_json_schema(), separators=(",", ":"))
+    return (
+        f"{system}\n\n"
+        "You are one bounded agent inside an Indian-market paper trading "
+        "system. India cash equities only, long-only. Return ONE compact JSON "
+        "object and nothing else, conforming to this JSON Schema - use these "
+        "EXACT field names (not prose labels), correct types, and every required "
+        f"field:\n{schema_hint}\n"
+        "When a claim rests on a news item, cite it by copying the bracketed "
+        "[news_id] tokens from the input verbatim into the nearest 'evidence' "
+        "array. Do not request order execution; risk, gate and broker controls "
+        "are deterministic and final."
+    )
 
 
 class LLMClient:
@@ -70,29 +95,16 @@ class LLMClient:
     def call_json(
         self, role: str, system: str, user: str, schema: type[BaseModel], model: str | None = None
     ) -> BaseModel:
-        model = model or self.default_model
+        model = model or routing.model_for(role)
         api_key = os.getenv(self.api_key_env)  # only sanctioned secret read; never logged
         if not api_key:
             raise LLMConfigError(f"{self.api_key_env} not set")
 
         prompt = f"{system}\n\n{user}"
-        # Give the model the exact output shape. Without this it invents prose
-        # keys ("Names in play today") that never match the pydantic fields, so
-        # extra="ignore" silently defaults every field and the object comes back
-        # hollow. The JSON Schema pins field names/types/required + enums.
-        schema_hint = json.dumps(schema.model_json_schema(), separators=(",", ":"))
-        system_content = (
-            f"{system}\n\n"
-            "You are one bounded agent inside an Indian-market paper trading "
-            "system. India cash equities only, long-only. Return ONE compact JSON "
-            "object and nothing else, conforming to this JSON Schema - use these "
-            "EXACT field names (not prose labels), correct types, and every required "
-            f"field:\n{schema_hint}\n"
-            "When a claim rests on a news item, cite it by copying the bracketed "
-            "[news_id] tokens from the input verbatim into the nearest 'evidence' "
-            "array. Do not request order execution; risk, gate and broker controls "
-            "are deterministic and final."
-        )
+        # Give the model the exact output shape (shared with the claude transport).
+        # Without this it invents prose keys that never match the pydantic fields,
+        # so extra="ignore" silently defaults every field and returns hollow.
+        system_content = build_system_content(system, schema)
 
         # Try the assigned model, then a chain of DISTINCT fallbacks. A single flaky
         # provider (deepseek-v4-flash OR mimo returning empty content) must not kill
