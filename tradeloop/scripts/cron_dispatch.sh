@@ -18,11 +18,13 @@ PY="/Users/dhyanpatel/anaconda3/envs/tradingbot/bin/python"
 
 case "$IST_TIME" in
   0800)
-    # Proven propose path (in-process OpenRouter DAG). Propose-only: stops at
-    # AWAITING_APPROVAL; a human reviews (/review-trade) and routes. Live Kite
+    # Proven propose path (in-process Claude DAG, on the subscription). Propose-only:
+    # stops at AWAITING_APPROVAL; a human reviews (/review-trade) and routes. Live Kite
     # scan is best-effort - a stale token degrades to an empty scan, not a crash.
     cd "$PROJECT_ROOT"
-    exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator premarket
+    # Preflight: fail loud (no cycle) if the claude CLI login has expired.
+    "$PY" tradeloop/scripts/verify_setup.py --mode premarket --backend claude || exit $?
+    exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator premarket --backend claude
     ;;
   # 1230 (intraday) and 1600 (postclose) intentionally not scheduled: those
   # modes are unproven live and each cycle costs ~35k tokens. Re-enable by

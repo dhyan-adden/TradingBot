@@ -74,22 +74,11 @@ case "$TRADELOOP_AGENT" in
 	      --skip-git-repo-check \
 	      "$INSTRUCTION"
     ;;
-  claude)
-    # Native Claude Code: your Claude auth/models. The orchestrator dispatches
-    # each TradeLoop team as a Claude Code subagent (Task tool). No OpenRouter
-    # and no bridge on this path. Optional model override via TRADELOOP_CLAUDE_MODEL.
-    cd "$PROJECT_ROOT"
-    exec claude -p "$INSTRUCTION" \
-	      ${TRADELOOP_CLAUDE_MODEL:+--model "$TRADELOOP_CLAUDE_MODEL"} \
-	      --mcp-config "$PROJECT_ROOT/tradeloop/config/claude_mcp.json" \
-	      --strict-mcp-config \
-	      --allowedTools "Task,mcp__zerodha__*,Read,Edit,Write,Bash,Glob,Grep" \
-	      --permission-mode bypassPermissions \
-	      --add-dir "$PROJECT_ROOT" \
-	      </dev/null
-    ;;
   *)
-    echo "unknown TRADELOOP_AGENT: $TRADELOOP_AGENT (use codex|claude)" >&2
+    # The claude backend no longer shells out here; the orchestrator runs the
+    # deterministic DAG in-process via ClaudeStageClient (python -m tradeloop.orchestrator
+    # premarket --backend claude). This entrypoint is the OpenRouter/codex path only.
+    echo "unknown TRADELOOP_AGENT: $TRADELOOP_AGENT (use codex)" >&2
     exit 2
     ;;
 esac
