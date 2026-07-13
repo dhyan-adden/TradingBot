@@ -13,6 +13,9 @@ class TradeAttribution:
     expected_r: float
     realized_r: float
     outcome: Outcome
+    # stable identity of the closing fill - journal/dossier entries key on this so
+    # re-running attribution over the full ledger never duplicates them
+    close_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -47,9 +50,14 @@ def _plans_by_symbol(trade_plans) -> Dict[str, object]:
     return {o.ticker.strip().upper(): o for o in trade_plans.orders}
 
 
-def _round_trips(fills: List[dict]) -> Dict[str, dict]:
-    """Return {symbol: {entry_vwap, exit_vwap}} for symbols fully closed."""
-    agg: Dict[str, dict] = {}
+def _episodes(fills: List[dict]) -> List[dict]:
+    """Chronological per-symbol round trips: an episode opens on a BUY from flat and
+    closes when the position returns to zero. Re-entries form NEW episodes instead
+    of merging into one VWAP blob, and each episode keeps its ENTRY fill (which
+    carries the plan's hard_stop/target_1/strategy_family, stamped at route time)."""
+    open_eps: Dict[str, dict] = {}
+    counts: Dict[str, int] = {}
+    closed: List[dict] = []
     for f in fills:
         # Ledger ORDER_FILLED events carry no "status" key; default FILLED so real
         # replayed fills are attributed (else paper_trades stays 0 forever).
@@ -59,45 +67,62 @@ def _round_trips(fills: List[dict]) -> Dict[str, dict]:
         side = str(f["side"]).upper()
         qty = int(f["quantity"])
         price = float(f["fill_price"])
-        a = agg.setdefault(symbol, {"buy_qty": 0, "buy_val": 0.0, "sell_qty": 0, "sell_val": 0.0})
-        if side == "BUY":
-            a["buy_qty"] += qty
-            a["buy_val"] += qty * price
-        else:
-            a["sell_qty"] += qty
-            a["sell_val"] += qty * price
-    closed: Dict[str, dict] = {}
-    for symbol, a in agg.items():
-        if a["sell_qty"] > 0 and a["sell_qty"] >= a["buy_qty"] and a["buy_qty"] > 0:
-            closed[symbol] = {
-                "entry_vwap": round(a["buy_val"] / a["buy_qty"], 6),
-                "exit_vwap": round(a["sell_val"] / a["sell_qty"], 6),
+        ep = open_eps.get(symbol)
+        if ep is None:
+            if side != "BUY":
+                continue  # exit with no tracked entry (pre-ledger history)
+            counts[symbol] = counts.get(symbol, 0) + 1
+            ep = open_eps[symbol] = {
+                "symbol": symbol, "n": counts[symbol], "net": 0, "entry_fill": f,
+                "buy_qty": 0, "buy_val": 0.0, "sell_qty": 0, "sell_val": 0.0,
             }
+        if side == "BUY":
+            ep["net"] += qty
+            ep["buy_qty"] += qty
+            ep["buy_val"] += qty * price
+        else:
+            ep["net"] -= qty
+            ep["sell_qty"] += qty
+            ep["sell_val"] += qty * price
+        if ep["net"] <= 0:
+            ep["close_ref"] = str(f.get("order_id") or f"trade-{ep['n']}")
+            closed.append(open_eps.pop(symbol))
     return closed
 
 
 def report(trade_plans, fills: List[dict]) -> StrategyPerformance:
     plans = _plans_by_symbol(trade_plans)
-    closed = _round_trips(fills)
     trades: List[TradeAttribution] = []
 
-    for symbol, rt in sorted(closed.items()):
-        plan = plans.get(symbol)
-        if plan is None:
-            continue
-        entry, exit_price = rt["entry_vwap"], rt["exit_vwap"]
-        stop = float(plan.hard_stop) if plan.hard_stop is not None else entry
-        target = float(plan.target_1) if plan.target_1 is not None else None
+    for ep in _episodes(fills):
+        symbol = ep["symbol"]
+        entry = round(ep["buy_val"] / ep["buy_qty"], 6)
+        exit_price = round(ep["sell_val"] / ep["sell_qty"], 6)
+        # Plan data comes from the episode's own entry fill; the run's orders.json
+        # is only a fallback for fills recorded before route-time stamping existed.
+        entry_fill, plan = ep["entry_fill"], plans.get(symbol)
+        stop = float(entry_fill.get("hard_stop") or 0.0)
+        if stop <= 0 and plan is not None and plan.hard_stop is not None:
+            stop = float(plan.hard_stop)
         risk = entry - stop
-        realized = round((exit_price - entry) / risk, 4) if risk > 0 else 0.0
+        if stop <= 0 or risk <= 0:
+            continue  # R is undefined without a recorded stop - never fabricate a 0R trade
+        target = entry_fill.get("target_1")
+        if target is None and plan is not None:
+            target = plan.target_1
+        target = float(target) if target is not None else None
+        strategy = str(entry_fill.get("strategy_family")
+                       or (plan.strategy_family if plan is not None else None) or "unknown")
+        realized = round((exit_price - entry) / risk, 4)
         hit_target = target is not None and exit_price >= target
         hit_stop = exit_price <= stop
         trades.append(TradeAttribution(
             symbol=symbol,
-            strategy_family=str(plan.strategy_family or "unknown"),
-            expected_r=expected_r(plan),
+            strategy_family=strategy,
+            expected_r=round((target - entry) / risk, 4) if target is not None else 0.0,
             realized_r=realized,
             outcome=classify_outcome(realized, hit_target, hit_stop),
+            close_ref=ep["close_ref"],
         ))
 
     return StrategyPerformance(trades=trades, by_strategy=_aggregate(trades), paper_trades=len(trades))

@@ -43,6 +43,7 @@ STAGE_META: dict[str, tuple[str, str, str]] = {
     "12_fundamentals": ("book", "Health Expert", "Checks each company's financial health for red flags."),
     "13_technical": ("chart", "Chart Expert", "Reads the price charts to spot clean, tradeable setups."),
     "14_shortlist": ("list", "Shortlister", "Combines every expert's view into today's ranked list of candidates."),
+    "15_holdings_review": ("shield", "Position Manager", "Reviews every holding: keep it, tighten the stop, trim, or exit."),
     "20_bull": ("bull", "The Optimist", "Argues the strongest case FOR buying each candidate."),
     "21_bear": ("bear", "The Skeptic", "Argues the strongest case AGAINST each candidate."),
     "22_debate": ("scale", "The Judge", "Weighs optimist vs skeptic and rates each stock's conviction."),
@@ -176,14 +177,47 @@ def _args(raw: dict, lead: str) -> tuple[str, list[str]]:
     return summary, points
 
 
+def _verdict_line(n: dict) -> str:
+    return (f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(n.get('verdict'), n.get('verdict',''))} "
+            f"(conviction {n.get('conviction','?')}/10)"
+            + (f" - {n['rationale']}" if n.get("rationale") else ""))
+
+
+def _debate_summary(names: list[dict]) -> str:
+    tradeable = [n for n in names if n.get("verdict") == "tradeable"]
+    return (f"{len(tradeable)} name(s) green-lit to trade." if tradeable
+            else "Cautious today - nothing green-lit to trade.")
+
+
 def _debate(raw: dict) -> tuple[str, list[str]]:
     names = raw.get("names") or []
-    points = [f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(n.get('verdict'), n.get('verdict',''))} "
-              f"(conviction {n.get('conviction','?')}/10)" for n in names]
-    tradeable = [n for n in names if n.get("verdict") == "tradeable"]
-    summary = (f"{len(tradeable)} name(s) green-lit to trade." if tradeable
-               else "Cautious today - nothing green-lit to trade.")
-    return summary, (points or ["No names debated."])
+    points = [_verdict_line(n) for n in names]
+    return _debate_summary(names), (points or ["No names debated."])
+
+
+def _claims_by_ticker(case: dict | None) -> dict[str, list[str]]:
+    claims: dict[str, list[str]] = {}
+    for a in ((case or {}).get("arguments") or []):
+        claims.setdefault((a.get("ticker") or "").upper(), []).append(a.get("claim", ""))
+    return claims
+
+
+def render_debate(raw: dict, bull: dict | None = None, bear: dict | None = None,
+                  model: str = "") -> StageView:
+    """The Judge's card with the complete recorded exchange: each name's verdict
+    followed by the bull's and bear's claims for it, in the judge's order."""
+    icon, title, role = _meta("22_debate")
+    names = (raw or {}).get("names") or []
+    bull_by, bear_by = _claims_by_ticker(bull), _claims_by_ticker(bear)
+    points: list[str] = []
+    for n in names:
+        t = (n.get("ticker") or "").upper()
+        points.append(_verdict_line(n))
+        points += [f"For: {c}" for c in bull_by.get(t, [])]
+        points += [f"Against: {c}" for c in bear_by.get(t, [])]
+    return StageView(stage="22_debate", icon=icon, title=title, role=role,
+                     summary=_debate_summary(names),
+                     points=points or ["No names debated."], model=label_model(model))
 
 
 _ANALYSIS_BUILDERS = {
@@ -242,6 +276,27 @@ def render_decision(orders_json: dict, model: str = "") -> StageView:
                      summary=summary, points=points, model=label_model(model))
 
 
+def _holdings_review(raw: dict) -> tuple[str, list[str]]:
+    rows = raw.get("reviews") or []
+    points = []
+    for r in rows:
+        extra = ""
+        if r.get("new_stop") is not None:
+            extra = f" new stop {r['new_stop']}"
+        if r.get("exit_quantity") is not None:
+            extra = f" sell {r['exit_quantity']}"
+        points.append(f"{pretty_ticker(r.get('ticker',''))}: {r.get('verdict','')}"
+                      f" ({r.get('reason_code','')}){extra} - {r.get('rationale','')}")
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r.get("verdict", "?")] = counts.get(r.get("verdict", "?"), 0) + 1
+    breakdown = ", ".join(f"{n} {v}" for v, n in sorted(counts.items()))
+    summary = (f"{len(rows)} holdings reviewed: {breakdown}." if rows
+               else "No holdings to review.")
+    return summary, points
+
+
+_ANALYSIS_BUILDERS["15_holdings_review"] = _holdings_review
 _ANALYSIS_BUILDERS["30_trade_plan"] = _trade_plan
 _ANALYSIS_BUILDERS["40_risk_report"] = _risk
 

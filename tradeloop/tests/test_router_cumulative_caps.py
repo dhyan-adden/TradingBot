@@ -67,3 +67,22 @@ def test_new_symbol_counts_toward_sector_cap(tmp_path):
 
     assert "ICICIBANK" not in book.positions             # blocked, did NOT fill
     assert "max_sector_allocation_exceeded" in _blocked_reasons(routed).get("ICICIBANK", [])
+
+
+def test_out_of_universe_holdings_count_toward_sector_cap(tmp_path):
+    # 2026-07-13 debt: CDSL/DLF are real held names outside universe.yaml, so the
+    # sector map had no entry for them and their 45% exposure was invisible to the
+    # gate. Unknown-sector names now share one capped UNKNOWN bucket: 45% held
+    # unknown + 16% incoming unknown = 61% > 50% and must be blocked.
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    book = PaperBroker(cash_inr=55000.0, positions={"CDSL": 30, "DLF": 20},
+                       avg_prices={"CDSL": 1000.0, "DLF": 750.0})
+    orders = _orders(tmp_path, ("ZOMATO", 16, 1000.0))
+    # ZOMATO enters the eligible route universe via this cycle's full-NSE scan
+    (tmp_path / "full_scan.jsonl").write_text('{"ticker": "ZOMATO"}\n', encoding="utf-8")
+
+    routed = route_orders_file(orders, tmp_path / "fills.json", book, settings,
+                               root=ROOT, mode="premarket")
+
+    assert "ZOMATO" not in book.positions                # blocked, did NOT fill
+    assert "max_sector_allocation_exceeded" in _blocked_reasons(routed).get("ZOMATO", [])

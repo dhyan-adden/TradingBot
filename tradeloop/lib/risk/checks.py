@@ -55,7 +55,9 @@ def evaluate(ticket: OrderTicket, state: RiskState, caps: RiskCaps) -> RiskDecis
         reasons.append("unsupported_product")
     if notional < caps.min_position_size_inr and ticket.side == "BUY":
         reasons.append("below_min_position_size")
-    if notional > caps.capital_inr * (caps.max_position_allocation_pct / 100):
+    # BUY-only: an appreciated position's exit notional can exceed the entry
+    # cap; the gate must never trap capital in a winner.
+    if notional > caps.capital_inr * (caps.max_position_allocation_pct / 100) and ticket.side == "BUY":
         reasons.append("max_position_allocation_exceeded")
     if state.open_risk_inr > caps.capital_inr * (caps.max_open_risk_pct / 100):
         reasons.append("max_open_risk_exceeded")
@@ -79,12 +81,14 @@ def liquidity_ok(position_value_inr: float, adv20_inr: float, max_participation_
 
 
 def _sector_reason(symbol: str, next_notional: float, state: RiskState, caps: RiskCaps) -> str:
-    sector = state.sectors.get(symbol)
-    if not sector:
-        return ""
+    # Names with no known sector (full-NSE entries outside universe.yaml) share one
+    # UNKNOWN pseudo-sector capped like any real one, so unmeasured concentration is
+    # bounded instead of invisible. Fail-open here would let a cluster of unclassified
+    # names concentrate without limit - the pre-live gate must never allow that.
+    sector = state.sectors.get(symbol) or "UNKNOWN"
     sector_deployed = next_notional
     for pos_symbol, quantity in state.positions.items():
-        if state.sectors.get(pos_symbol) == sector:
+        if (state.sectors.get(pos_symbol) or "UNKNOWN") == sector:
             sector_deployed += quantity * state.avg_prices.get(pos_symbol, 0.0)
     if sector_deployed > caps.capital_inr * (caps.max_sector_allocation_pct / 100):
         return "max_sector_allocation_exceeded"

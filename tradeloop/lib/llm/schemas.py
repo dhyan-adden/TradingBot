@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 _NEWS_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 
@@ -56,7 +56,14 @@ class AdhocIntake(BaseModel):
         "portfolio_management", "full_trade_request",
     ]
     safe_interpretation: str
-    required_stages: list[str] = Field(default_factory=list)
+    # Exact DAG artifact filenames (mirrors stages.DAG; a sync test enforces it).
+    # Live 2026-07-13: an unconstrained list[str] let descriptive names through,
+    # the pruning intersection went empty, and the whole cycle ran hollow.
+    required_stages: list[Literal[
+        "10_news.md", "11_sentiment.md", "12_fundamentals.md", "13_technical.md",
+        "14_shortlist.md", "20_bull.md", "21_bear.md", "22_debate.md",
+        "30_trade_plan.md", "40_risk_report.md", "41_pm_decision.md",
+    ]] = Field(default_factory=list)
     refused_parts: list[str] = Field(default_factory=list)
 
 
@@ -144,10 +151,44 @@ class DebateVerdict(EvidenceMixin):
     ticker: str
     conviction: float = Field(ge=0, le=10)
     verdict: Literal["tradeable", "watch", "pass"]
+    rationale: str = Field(
+        default="",  # pre-rationale run archives must keep validating
+        description="One sentence naming the decisive bull or bear point that "
+                    "set this verdict.",
+    )
 
 
 class Debate(EvidenceMixin):
     names: list[DebateVerdict] = Field(default_factory=list)
+
+
+# --- 15 holdings review (non-order modes only) ------------------------------
+class HoldingVerdict(EvidenceMixin):
+    ticker: str
+    verdict: Literal["HOLD", "ADD", "TIGHTEN_STOP", "TRIM", "EXIT"]
+    conviction: float = Field(ge=0, le=10)
+    # Exits are reason-coded, never P&L-impulse: cutting winners early because
+    # they are green is how swing expectancy dies (profit_protect -> tighten, not exit).
+    reason_code: Literal[
+        "stop_breach", "tripwire", "thesis_break", "event_risk",
+        "profit_protect", "thesis_intact", "thesis_strengthened",
+    ]
+    rationale: str = ""
+    new_stop: float | None = Field(default=None, gt=0)
+    exit_quantity: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _verdict_requires_params(self):
+        if self.verdict == "TIGHTEN_STOP" and self.new_stop is None:
+            raise ValueError("TIGHTEN_STOP requires new_stop")
+        if self.verdict == "TRIM" and self.exit_quantity is None:
+            raise ValueError("TRIM requires exit_quantity")
+        return self
+
+
+class HoldingsReview(EvidenceMixin):
+    reviews: list[HoldingVerdict] = Field(default_factory=list)
+    carry_forward: str = ""
 
 
 # --- 30 trade plan (unified Trade Ticket) ---------------------------------
@@ -210,6 +251,7 @@ SCHEMA_FOR_STAGE: dict[str, type[BaseModel]] = {
     "12_fundamentals": FundamentalsReport,
     "13_technical": TechnicalReport,
     "14_shortlist": Shortlist,
+    "15_holdings_review": HoldingsReview,
     "20_bull": BullCase,
     "21_bear": BearCase,
     "22_debate": Debate,

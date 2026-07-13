@@ -26,9 +26,21 @@ case "$IST_TIME" in
     "$PY" tradeloop/scripts/verify_setup.py --mode premarket --backend claude || exit $?
     exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator premarket --backend claude
     ;;
-  # 1230 (intraday) and 1600 (postclose) intentionally not scheduled: those
-  # modes are unproven live and each cycle costs ~35k tokens. Re-enable by
-  # mirroring the premarket line with the mode swapped, once validated.
+  1400)
+    # Intraday pulse (14:00 IST): holdings health only - can propose exits and
+    # stop-tightens, still stops at AWAITING_APPROVAL. Late-session slot so an
+    # approved exit has a full hour to route before the 15:30 close.
+    cd "$PROJECT_ROOT"
+    "$PY" tradeloop/scripts/verify_setup.py --mode intraday --backend claude || exit $?
+    exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator intraday --backend claude
+    ;;
+  1600)
+    # Postclose review (16:00 IST): analysis-only re-underwrite of the book;
+    # verdicts land in carry-forward for the next premarket. Routes nothing.
+    cd "$PROJECT_ROOT"
+    "$PY" tradeloop/scripts/verify_setup.py --mode postclose --backend claude || exit $?
+    exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator postclose --backend claude
+    ;;
   *)
     exit 0
     ;;

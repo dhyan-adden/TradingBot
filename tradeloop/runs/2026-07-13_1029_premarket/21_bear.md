@@ -1,0 +1,79 @@
+# 21_bear
+
+```json
+{
+  "evidence": [],
+  "arguments": [
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "claim": "Composite score of 10.0 is a clear outlier versus every other candidate's 8.0, yet it carries zero news catalyst - an anomalous standout score with no disclosed driver is itself a reason to distrust the ranking rather than chase the breakout."
+    },
+    {
+      "evidence": [],
+      "ticker": "63MOONS",
+      "claim": "Thesis rests entirely on volume crossing a threshold with no news catalyst; 63MOONS has a track record of sharp speculative volume spikes that reverse once early momentum buyers exit, making the breakout a fade risk rather than a trend start."
+    },
+    {
+      "evidence": [],
+      "ticker": "ARKADE",
+      "claim": "Entry (136.82) sits only ~5.8% above stop (128.92) with no fundamental catalyst behind the move, leaving thin room for normal intraday volatility to stop the position out before any thesis can play out."
+    },
+    {
+      "evidence": [],
+      "ticker": "AVANTEL",
+      "claim": "Purely technical breakout with no catalyst; AVANTEL is a thinly-traded smallcap prone to momentum-driven runs on speculative interest that unwind quickly once volume normalizes."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "claim": "No catalyst beyond volume confirmation; JUSTDIAL has repeatedly produced breakouts that fail and revert to range once initial momentum exhausts, so the setup needs a fundamental trigger to be credible, which is absent here."
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "claim": "No news catalyst disclosed; as a jewelry retailer the stock carries material gold-price and margin sensitivity that a pure price-and-volume breakout thesis does not account for."
+    },
+    {
+      "evidence": [],
+      "ticker": "ZENSARTECH",
+      "claim": "The thesis itself concedes 'broader IT-sector headline pressure' and frames single-name divergence as merely 'notable' - a stock breaking out against a pressured sector on technicals alone is at least as likely to be a lagging reversion trap as genuine relative strength."
+    },
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "claim": "Entry/stop is tight (~3.5% risk: 1029.35 vs 993.19) with no news catalyst; AMC stocks are direct proxies for broad equity-market sentiment, so any market-wide rotation or pullback invalidates the setup independent of the stock's own chart pattern."
+    },
+    {
+      "evidence": [],
+      "ticker": "HAPPSTMNDS",
+      "claim": "No catalyst beyond volume; smallcap IT-services names like HAPPSTMNDS are thinly traded and historically prone to breakout failures once the initial volume spike fades."
+    },
+    {
+      "evidence": [],
+      "ticker": "ROUTE",
+      "claim": "Technical-only breakout with no disclosed catalyst; Route Mobile has a history of breakout failures on relatively low float once volume normalizes post-spike, undercutting the momentum thesis."
+    }
+  ],
+  "tier_c_only": [
+    "LUMAXIND",
+    "63MOONS",
+    "ARKADE",
+    "AVANTEL",
+    "JUSTDIAL",
+    "KALYANKJIL",
+    "ZENSARTECH",
+    "UTIAMC",
+    "HAPPSTMNDS",
+    "ROUTE"
+  ],
+  "pump_risk": [
+    "LUMAXIND",
+    "63MOONS",
+    "ARKADE",
+    "AVANTEL",
+    "KALYANKJIL",
+    "ROUTE"
+  ]
+}
+```

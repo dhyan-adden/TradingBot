@@ -32,6 +32,19 @@ def test_read_run_complete_has_stages_and_decision(tmp_path):
     assert out["decision"]["summary"]
 
 
+def test_read_run_debate_card_includes_bull_and_bear_arguments(tmp_path):
+    d = _make_run(tmp_path, "2026-07-13_1330_adhoc", True)
+    (d / "20_bull.json").write_text(json.dumps(
+        {"arguments": [{"ticker": "UTIAMC", "claim": "volume-confirmed"}]}))
+    (d / "21_bear.json").write_text(json.dumps(
+        {"arguments": [{"ticker": "UTIAMC", "claim": "beta rally"}]}))
+    (d / "22_debate.json").write_text(json.dumps(
+        {"names": [{"ticker": "UTIAMC", "conviction": 6.0, "verdict": "tradeable"}]}))
+    debate = [s for s in read_run(d)["stages"] if s["stage"] == "22_debate"][0]
+    assert "For: volume-confirmed" in debate["points"]
+    assert "Against: beta rally" in debate["points"]
+
+
 def test_read_run_live_when_no_decision(tmp_path):
     d = _make_run(tmp_path, "2026-07-04_0900_premarket", False)
     out = read_run(d)

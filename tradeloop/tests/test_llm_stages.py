@@ -68,3 +68,25 @@ def test_run_stage_missing_prompt_raises(tmp_path):
     d = _run_dir(tmp_path)
     with pytest.raises(FileNotFoundError):
         stages.run_stage("99_nope", d, FakeClient(GOOD_SHORTLIST))
+
+
+def test_holdings_review_stage_wired(tmp_path):
+    from tradeloop.lib.llm import stages, schemas
+
+    class FakeClient:
+        def call_json(self, role, system, user, schema, model=None):
+            assert role == "15_holdings_review"
+            assert schema is schemas.HoldingsReview
+            assert "00_context.md" in user           # named inputs assembled
+            return schemas.HoldingsReview(reviews=[], carry_forward="nothing to flag")
+
+    (tmp_path / "00_context.md").write_text("# ctx\n", encoding="utf-8")
+    out = stages.run_stage("15_holdings_review", tmp_path, FakeClient())
+    assert out.carry_forward == "nothing to flag"
+    assert (tmp_path / "15_holdings_review.json").exists()
+    assert (tmp_path / "15_holdings_review.md").exists()
+
+
+def test_holdings_review_prompt_file_exists():
+    from tradeloop.lib.llm.stages import PROMPTS_DIR, PROMPT_PATH
+    assert (PROMPTS_DIR / f"{PROMPT_PATH['15_holdings_review']}.md").exists()

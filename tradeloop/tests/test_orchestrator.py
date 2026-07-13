@@ -110,6 +110,35 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
     assert rc == 1
 
 
+def test_uncited_news_candidates_warns_but_never_blocks(monkeypatch, tmp_path, capsys) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def fake_prepare(mode, request="", root=None):
+        run_dir = root / "runs" / f"warn_{mode}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
+        # news-track candidate on the shortlist, yet zero citations anywhere:
+        # the one shape the citation tripwire must flag - without failing the run
+        (run_dir / "14_shortlist.json").write_text(json.dumps({
+            "evidence": [],
+            "candidates": [{"ticker": "SBIN", "source_track": "tier_a"}]}),
+            encoding="utf-8")
+        (run_dir / "orders.json").write_text(json.dumps({"orders": []}), encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    rc = orchestrator.run_cycle("premarket", root=root)
+    out = capsys.readouterr().out
+    assert rc == 0                                   # heuristic: warn, never block
+    assert "tradeloop_warning=UNCITED_NEWS_CANDIDATES" in out
+    assert "SBIN" in out
+    assert "tradeloop_cycle=AWAITING_APPROVAL" in out
+
+
 def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
@@ -123,7 +152,8 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
         # One approved BUY (in universe, >= min_position_size 15000, under the
         # 25% allocation cap of the 100000 starting equity) + one non-universe reject.
         (run_dir / "orders.json").write_text(json.dumps({"orders": [
-            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0},
+            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0,
+             "target_1": 1100.0, "strategy_family": "20d_breakout"},
             {"ticker": "FAKECO", "side": "BUY", "quantity": 1, "price": 5000},
         ]}), encoding="utf-8")
         return 0
@@ -156,6 +186,11 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     fill_events = Ledger(book_path).replay(["paper.order.filled"])
     assert len(fill_events) == 1
     assert fill_events[0]["symbol"] == "RELIANCE" and fill_events[0]["quantity"] == 20
+    # Plan data rides the fill event so attribution can score this trade whenever
+    # it closes, without needing the closing run's orders.json.
+    assert fill_events[0]["hard_stop"] == 950.0
+    assert fill_events[0]["target_1"] == 1100.0
+    assert fill_events[0]["strategy_family"] == "20d_breakout"
 
     # Approving the same run twice must refuse - double-routing doubles positions.
     rc = orchestrator.route_cycle(run_dir, root=root)
@@ -177,3 +212,99 @@ def test_route_respects_kill_switch(monkeypatch, tmp_path) -> None:
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 0
     assert not (run_dir / "fills.json").exists()  # nothing routed
+
+
+def test_route_applies_tighten_only_stop_updates(monkeypatch, tmp_path) -> None:
+    # Stop updates ride the same approval as orders; tighten-only, held-only.
+    # Postclose may tighten (pure risk reduction) even though it fills nothing.
+    from tradeloop.lib.audit.ledger import ORDER_FILLED
+    from tradeloop.scripts.prepare_cycle import _portfolio_state
+
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    led = Ledger(root / "state" / "ledger.db")
+    led.append({"type": ORDER_FILLED, "order_id": "X1", "symbol": "HDFCBANK", "side": "BUY",
+                "quantity": 30, "fill_price": 830.62, "product": "CNC", "hard_stop": 807.24})
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+    (run_dir / "orders.json").write_text(json.dumps(
+        {"mode": "postclose", "live_orders_enabled": False,
+         "generated_by": "test", "orders": [], "held": []}), encoding="utf-8")
+    (run_dir / "stop_updates.json").write_text(json.dumps(
+        {"HDFCBANK": 820.0, "GHOST": 50.0}), encoding="utf-8")
+
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
+    state = _portfolio_state(root)
+    assert state.hard_stops["HDFCBANK"] == 820.0     # tightened
+    assert "GHOST" not in state.hard_stops           # unheld symbol ignored
+
+    # loosening attempt is a no-op (fills.json stays [], so re-route is allowed)
+    (run_dir / "stop_updates.json").write_text(json.dumps({"HDFCBANK": 700.0}), encoding="utf-8")
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
+    assert _portfolio_state(root).hard_stops["HDFCBANK"] == 820.0
+
+
+def test_run_cycle_resumes_existing_run_dir_without_prepare(monkeypatch, tmp_path) -> None:
+    # --run-dir: a killed cycle is completed in place; prepare must NOT run
+    # (a new run dir would re-bill every stage).
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+
+    def exploding_prepare(mode, request="", root=None):
+        raise AssertionError("prepare must not run on resume")
+
+    def fake_reason(rd, mode, agent, timeout, **kwargs):
+        (rd / "orders.json").write_text(json.dumps(
+            {"mode": mode, "live_orders_enabled": False, "generated_by": "test",
+             "orders": [], "held": []}), encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_prepare", exploding_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    rc = orchestrator.run_cycle("postclose", root=root, run_dir=run_dir)
+    assert rc == 0
+
+
+def test_run_cycle_rejects_mode_mismatched_run_dir(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+    rc = orchestrator.run_cycle("premarket", root=root, run_dir=run_dir)
+    assert rc == 2
+
+
+def test_holdings_modes_skip_on_empty_book(monkeypatch, tmp_path, capsys) -> None:
+    # No holdings -> intraday/postclose have nothing to review; the cycle must
+    # skip BEFORE prepare/scan/LLM so an empty book costs zero tokens.
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def exploding(*a, **k):
+        raise AssertionError("must not run on an empty book")
+    monkeypatch.setattr(orchestrator, "_prepare", exploding)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", exploding)
+
+    for mode in ("intraday", "postclose"):
+        rc = orchestrator.run_cycle(mode, root=root)
+        assert rc == 0
+        assert "tradeloop_cycle=SKIP reason=no_holdings" in capsys.readouterr().out
+
+    # premarket must NOT be gated on holdings (discovery is its whole job)
+    def fake_reason(rd, mode, agent, timeout, **kwargs):
+        (rd / "orders.json").write_text(json.dumps(
+            {"mode": mode, "live_orders_enabled": False, "generated_by": "test",
+             "orders": [], "held": []}), encoding="utf-8")
+        return 0
+
+    def fake_prepare(mode, request="", root=None):
+        d = root / "runs" / f"empty_{mode}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    assert orchestrator.run_cycle("premarket", root=root) == 0

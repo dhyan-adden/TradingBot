@@ -95,3 +95,84 @@ def test_injected_client_overrides_flag(monkeypatch, tmp_path):
     injected = object()
     prepare_cycle.prepare("premarket", root=tmp_path, kite_client=injected)
     assert captured["kite_client"] is injected
+
+
+def test_portfolio_state_takes_latest_stop_update(tmp_path):
+    from tradeloop.lib.audit.ledger import Ledger, ORDER_FILLED, STOP_UPDATED
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.yaml").write_text("capital:\n  paper_starting_inr: 100000\n")
+    (tmp_path / "state").mkdir()
+    led = Ledger(tmp_path / "state" / "ledger.db")
+    led.append({"type": ORDER_FILLED, "order_id": "X1", "symbol": "HDFCBANK",
+                "side": "BUY", "quantity": 30, "fill_price": 830.62,
+                "product": "CNC", "hard_stop": 807.24})
+    led.append({"type": STOP_UPDATED, "symbol": "HDFCBANK", "hard_stop": 820.0})
+    state = prepare_cycle._portfolio_state(tmp_path)
+    assert state.hard_stops["HDFCBANK"] == 820.0
+
+
+class _LtpKite:
+    """Minimal kite double: serves LTPs for held symbols."""
+    def __init__(self, ltps):
+        self._ltps = ltps
+
+    def ltp(self, symbols):
+        return {s: self._ltps[s] for s in symbols if s in self._ltps}
+
+
+def _seeded_root(tmp_path):
+    """Project root with one held position (real ledger, real portfolio state)."""
+    from tradeloop.lib.audit.ledger import Ledger, ORDER_FILLED
+    (tmp_path / "config").mkdir(exist_ok=True)
+    (tmp_path / "config" / "settings.yaml").write_text("capital:\n  paper_starting_inr: 100000\n")
+    (tmp_path / "state").mkdir(exist_ok=True)
+    (tmp_path / "memory").mkdir(exist_ok=True)
+    Ledger(tmp_path / "state" / "ledger.db").append(
+        {"type": ORDER_FILLED, "order_id": "X1", "symbol": "HDFCBANK", "side": "BUY",
+         "quantity": 30, "fill_price": 830.62, "product": "CNC", "hard_stop": 807.24})
+    return tmp_path
+
+
+def test_intraday_prepare_scopes_scan_to_holdings_and_writes_ltp(tmp_path, monkeypatch):
+    import json
+    root = _seeded_root(tmp_path)
+    captured = {}
+
+    def fake_ingest(as_of, run_dir, config_dir, kite_client=None,
+                    source_health_root=None, symbols=None):
+        captured["symbols"] = symbols
+    monkeypatch.setattr(prepare_cycle, "ingest_run", fake_ingest)
+
+    kite = _LtpKite({"HDFCBANK": 812.5})
+    run_dir = prepare_cycle.prepare("intraday", root=root, kite_client=kite)
+    assert captured["symbols"] == ["HDFCBANK"]
+    assert json.loads((run_dir / "holdings_ltp.json").read_text()) == {"HDFCBANK": 812.5}
+
+
+def test_premarket_prepare_keeps_full_universe(tmp_path, monkeypatch):
+    root = _seeded_root(tmp_path)
+    captured = {}
+
+    def fake_ingest(as_of, run_dir, config_dir, kite_client=None,
+                    source_health_root=None, symbols=None):
+        captured["symbols"] = symbols
+    monkeypatch.setattr(prepare_cycle, "ingest_run", fake_ingest)
+    run_dir = prepare_cycle.prepare("premarket", root=root, kite_client=_LtpKite({}))
+    assert captured["symbols"] is None
+    assert not (run_dir / "holdings_ltp.json").exists()
+
+
+def test_intraday_prepare_degrades_without_ltp(tmp_path, monkeypatch):
+    root = _seeded_root(tmp_path)
+    monkeypatch.setattr(
+        prepare_cycle, "ingest_run",
+        lambda as_of, run_dir, config_dir, kite_client=None,
+               source_health_root=None, symbols=None: None)
+
+    class _Boom:
+        def ltp(self, symbols):
+            raise RuntimeError("token expired")
+    run_dir = prepare_cycle.prepare("intraday", root=root, kite_client=_Boom())
+    assert not (run_dir / "holdings_ltp.json").exists()
+    assert (run_dir / "ltp_error.txt").exists()   # loud degrade, never a crash

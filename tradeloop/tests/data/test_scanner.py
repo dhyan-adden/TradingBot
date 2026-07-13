@@ -37,6 +37,20 @@ def test_scan_symbol_uses_real_atr_no_fabrication():
     assert float(scan.stop_zone) < float(scan.entry_zone)
 
 
+def test_scan_targets_are_2r_and_3r_of_stop_distance():
+    # 2026-07-13 debt: T1 at +2.0 ATR over a 1.5 ATR stop was a 1.33R first target -
+    # structurally unable to clear the 0.3R promotion-gate expectancy after costs.
+    # Targets are now R multiples of the actual stop distance: T1 = 2R, T2 = 3R.
+    kc = OneSymbolKite(_uptrend_candles(60))
+    scan = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
+    assert scan is not None
+    entry, stop = float(scan.entry_zone), float(scan.stop_zone)
+    t1, t2 = (float(x) for x in scan.target_zone.split("/"))
+    risk = entry - stop
+    assert abs((t1 - entry) - 2 * risk) < 0.03   # 2dp string rounding tolerance
+    assert abs((t2 - entry) - 3 * risk) < 0.03
+
+
 def test_scan_universe_bounded_by_max_fetch():
     # kills an unbounded scan that would hammer Kite for the full universe every cycle
     kc = OneSymbolKite(_uptrend_candles(60))

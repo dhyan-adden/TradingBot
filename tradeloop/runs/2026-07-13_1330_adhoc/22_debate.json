@@ -1,0 +1,47 @@
+{
+  "evidence": [],
+  "names": [
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "conviction": 6.0,
+      "verdict": "tradeable",
+      "rationale": "Tightest proportional risk in the set (~3.5% to stop) on a volume-confirmed breakout with no retail-pump flag, so the asymmetry survives the bear's beta-rally caveat."
+    },
+    {
+      "evidence": [],
+      "ticker": "HEG",
+      "conviction": 5.5,
+      "verdict": "tradeable",
+      "rationale": "Volume-confirmed breakout without the small-float pump signature; the cyclical-demand point is a fundamental caveat, not evidence the move is fake."
+    },
+    {
+      "evidence": [],
+      "ticker": "MASTEK",
+      "conviction": 5.0,
+      "verdict": "watch",
+      "rationale": "Bull concedes the IT tailwind is unconfirmed for this name, so despite the tight ~4.75% stop it is a pure technical play the bear rightly flags for pump risk."
+    },
+    {
+      "evidence": [],
+      "ticker": "TANLA",
+      "conviction": 4.0,
+      "verdict": "watch",
+      "rationale": "Small-cap CPaaS prone to retail momentum runs, so its volume confirmation is the same signature a speculative pump produces - wait for follow-through."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "conviction": 4.0,
+      "verdict": "watch",
+      "rationale": "Smaller-float retail favorite with a history of speculative spikes, so a catalyst-free breakout fits pump-and-fade as easily as a durable move."
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "conviction": 3.0,
+      "verdict": "pass",
+      "rationale": "Weakest structure - the widest stop (~7.2%) plus pump risk and a promoter-pledge/gold-margin overhang leaves the catalyst-free breakout exposed to a fast reversal."
+    }
+  ]
+}

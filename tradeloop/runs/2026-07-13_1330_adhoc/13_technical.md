@@ -1,0 +1,99 @@
+# 13_technical
+
+```json
+{
+  "evidence": [
+    "152603942bfa",
+    "2ea720ff0a83",
+    "9119cca0ac1e",
+    "12fb7277bc1d",
+    "d1b9485d5e12",
+    "8a55bda0b6c4",
+    "4706813989b5"
+  ],
+  "setups": [
+    {
+      "evidence": [
+        "152603942bfa",
+        "2ea720ff0a83"
+      ],
+      "ticker": "TCS",
+      "classification": "avoid",
+      "news_confirmed": true,
+      "notes": "Catalyst real (6% rally on Q1 beat + ABB AI deal, volume_above_threshold) but scan shows no clean pattern (score 2.0, blank setup type) - looks gap-extended, not a fresh base. Avoid chasing; revisit on a pullback/base."
+    },
+    {
+      "evidence": [
+        "9119cca0ac1e",
+        "12fb7277bc1d",
+        "d1b9485d5e12"
+      ],
+      "ticker": "HDFCBANK",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Current holding (30@830.62, stop 807.24) running into Q1 FY27 earnings this week, -2% into the print despite a Buy/1850 target. Absent from the breakout/pullback scan - no fresh technical confirmation. Hold through print, watch the hard stop given the bond-yield headwind on financials."
+    },
+    {
+      "evidence": [
+        "2ea720ff0a83",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "classification": "avoid",
+      "news_confirmed": true,
+      "notes": "Catalyst is a sector read-through from TCS's print, not INFY-specific, and INFY does not appear anywhere in the Nifty scan - no chart confirmation. Reject until INFY prints its own setup."
+    },
+    {
+      "evidence": [
+        "4706813989b5"
+      ],
+      "ticker": "SBIN",
+      "classification": "exit_watch",
+      "news_confirmed": true,
+      "notes": "Current holding (23@1042.42, stop 1015.40). Only tier-C news (loan-growth/ROE note, bond issuance) - no thesis-grade catalyst. Scan shows an unremarkable ema20_pullback (score 4.0, volume_normal, entry 1038.00/stop 1008.21). Rate-sensitive financial exposed to the bond-yield rout; hold, no add, watch the stop."
+    },
+    {
+      "evidence": [],
+      "ticker": "HEG",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst. Entry 573.55 / stop 542.54 / targets 614.89-635.56."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst. Entry 676.85 / stop 640.92 / targets 724.76-748.71."
+    },
+    {
+      "evidence": [],
+      "ticker": "MASTEK",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst (IT-sector tailwind is unconfirmed for this name specifically). Entry 1758.30 / stop 1674.78 / targets 1869.66-1925.34."
+    },
+    {
+      "evidence": [],
+      "ticker": "TANLA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst. Entry 573.40 / stop 546.05 / targets 609.87-628.11."
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst. Entry 519.80 / stop 482.33 / targets 569.76-594.75."
+    },
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold, no news catalyst. Entry 1026.10 / stop 989.78 / targets 1074.52-1098.73."
+    }
+  ]
+}
+```
