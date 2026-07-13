@@ -82,7 +82,11 @@ def scan_symbol(symbol: str, kite_client, as_of: date, min_turnover_inr: float =
         cleanliness_score=round(min(score, 10), 2),
         entry_zone=f"{latest:.2f}",
         stop_zone=f"{latest - (1.5 * atr_value):.2f}",
-        target_zone=f"{latest + (2.0 * atr_value):.2f}/{latest + (3.0 * atr_value):.2f}",
+        # Targets are R multiples of the 1.5*ATR stop distance: T1 = 2R (+3.0 ATR),
+        # T2 = 3R (+4.5 ATR). The trader prompt copies these levels verbatim, so a
+        # sub-2R first target would cap the whole system's expectancy below the
+        # 0.3R promotion gate once costs are paid.
+        target_zone=f"{latest + (3.0 * atr_value):.2f}/{latest + (4.5 * atr_value):.2f}",
         volume_context=volume_signal.reason if volume_signal else "volume_unavailable",
     )
 
