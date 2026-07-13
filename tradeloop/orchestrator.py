@@ -545,9 +545,15 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         # Without this append, positions would not survive to the next cycle.
         new_fills = [f for f in book.fills[pre_fills:] if f.status == "FILLED"]
         if new_fills:
+            approved = load_orders(orders_path).orders
             stops = {o.ticker.strip().upper(): float(o.hard_stop)
-                     for o in load_orders(orders_path).orders if o.hard_stop is not None}
-            append_book(book_path, new_fills, hard_stops=stops)
+                     for o in approved if o.hard_stop is not None}
+            # Entry plan (target, strategy) rides the BUY fill event so attribution
+            # can score the round trip whichever future run closes it.
+            plan_meta = {o.ticker.strip().upper():
+                         {"target_1": o.target_1, "strategy_family": o.strategy_family}
+                         for o in approved if o.side.strip().upper() == "BUY"}
+            append_book(book_path, new_fills, hard_stops=stops, plan_meta=plan_meta)
         # Stop updates ride the same approval as the orders (invoking route IS
         # the approval). Tighten-only and held-only are re-checked here against
         # the live post-fill book, so a full exit cancels its own stale tighten.

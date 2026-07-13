@@ -152,7 +152,8 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
         # One approved BUY (in universe, >= min_position_size 15000, under the
         # 25% allocation cap of the 100000 starting equity) + one non-universe reject.
         (run_dir / "orders.json").write_text(json.dumps({"orders": [
-            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0},
+            {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000, "hard_stop": 950.0,
+             "target_1": 1100.0, "strategy_family": "20d_breakout"},
             {"ticker": "FAKECO", "side": "BUY", "quantity": 1, "price": 5000},
         ]}), encoding="utf-8")
         return 0
@@ -185,6 +186,11 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     fill_events = Ledger(book_path).replay(["paper.order.filled"])
     assert len(fill_events) == 1
     assert fill_events[0]["symbol"] == "RELIANCE" and fill_events[0]["quantity"] == 20
+    # Plan data rides the fill event so attribution can score this trade whenever
+    # it closes, without needing the closing run's orders.json.
+    assert fill_events[0]["hard_stop"] == 950.0
+    assert fill_events[0]["target_1"] == 1100.0
+    assert fill_events[0]["strategy_family"] == "20d_breakout"
 
     # Approving the same run twice must refuse - double-routing doubles positions.
     rc = orchestrator.route_cycle(run_dir, root=root)
