@@ -1,0 +1,110 @@
+# 13_technical
+
+```json
+{
+  "evidence": [],
+  "setups": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "12fb7277bc1d",
+        "2f16acc4af52"
+      ],
+      "ticker": "HDFCBANK",
+      "classification": "exit_watch",
+      "news_confirmed": false,
+      "notes": "Held 30@830.62/stop807.24. ICICI Sec Buy call (target 1850) not corroborated by any chart setup in the scan output - ticker absent from raw setups, so no breakout/pullback evidence to confirm the catalyst. Q1 results due this week adds event risk. Hold, no add, watch into earnings."
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4",
+        "5b4b6e242b0d"
+      ],
+      "ticker": "INFY",
+      "classification": "avoid",
+      "news_confirmed": false,
+      "notes": "Not held. KR Choksey Accumulate call conflicts with Nifty IT selloff where INFY is a top loser; catalyst is mixed, not a breakout thesis. No scanner setup present to confirm chart support. Avoid until sector tape stabilizes and results are digested."
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "8d9924d85f54"
+      ],
+      "ticker": "SBIN",
+      "classification": "exit_watch",
+      "news_confirmed": false,
+      "notes": "Held 23@1042.42/stop1015.40. News is Tier-C attention-only aggregator content, explicitly not thesis-grade. Scanner shows only a weak ema20_pullback (score 4.0, entry 1040.90/stop 1011.11, volume_normal) - no fresh chart trigger. Maintain exit-watch, no change to posture."
+    },
+    {
+      "evidence": [],
+      "ticker": "LUMAXIND",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 10.0 (highest in scan), entry 5386.50/stop 5118.80, targets 5743.43/5921.89. No news catalyst - clean quiet setup."
+    },
+    {
+      "evidence": [],
+      "ticker": "63MOONS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 770.25/stop 720.23, targets 836.95/870.30. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "ARKADE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 136.82/stop 128.92, targets 147.35/152.62. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "AVANTEL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 185.23/stop 172.48, targets 202.24/210.74. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 640.00/stop 607.21, targets 683.71/705.57. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 512.45/stop 476.79, targets 560.00/583.78. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "ZENSARTECH",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 544.80/stop 500.67, targets 603.64/633.05. No news catalyst - notably resilient given IT-sector headline pressure elsewhere."
+    },
+    {
+      "evidence": [],
+      "ticker": "UTIAMC",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 1029.35/stop 993.19, targets 1077.56/1101.66. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "HAPPSTMNDS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 399.40/stop 378.25, targets 427.60/441.70. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "ROUTE",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d breakout, score 8.0, volume_above_threshold, entry 570.45/stop 543.61, targets 606.24/624.14. No news catalyst."
+    }
+  ]
+}
+```
