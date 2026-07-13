@@ -191,3 +191,12 @@ def test_fetch_and_model_loggers(tmp_path):
     # no secret-like keys leaked into the model-call event
     assert not any(k.lower().endswith(("key", "secret", "token")) for k in rows[2])
     led.verify_chain()
+
+
+def test_stop_updated_event_appends_and_replays(tmp_path):
+    led = _ledger(tmp_path)
+    led.append({"type": L.STOP_UPDATED, "symbol": "HDFCBANK", "hard_stop": 820.0})
+    events = led.replay([L.STOP_UPDATED])
+    assert events[0]["symbol"] == "HDFCBANK"
+    assert events[0]["hard_stop"] == 820.0
+    led.verify_chain()

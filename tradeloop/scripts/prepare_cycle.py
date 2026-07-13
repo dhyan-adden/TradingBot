@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger
+from tradeloop.lib.audit.ledger import ORDER_FILLED, STOP_UPDATED, Ledger
 from tradeloop.lib.broker.paper_book import hydrate
 from tradeloop.lib.data.ingest import run as ingest_run
 from tradeloop.lib.data.kite import KiteClient
@@ -32,7 +32,7 @@ def _portfolio_state(base: Path) -> PortfolioState:
         return empty
     book = hydrate(ledger_path, empty.cash_inr)
     stops = {}
-    for event in Ledger(ledger_path).replay([ORDER_FILLED]):
+    for event in Ledger(ledger_path).replay([ORDER_FILLED, STOP_UPDATED]):
         if float(event.get("hard_stop", 0.0)) > 0:
             stops[event["symbol"]] = float(event["hard_stop"])
     stops = {s: v for s, v in stops.items() if book.positions.get(s, 0) > 0}

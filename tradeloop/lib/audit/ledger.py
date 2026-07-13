@@ -15,6 +15,7 @@ FETCH_FAIL = "fetch.fail"
 MODEL_CALL = "model.call"
 RISK_VERDICT = "risk.verdict"
 ORDER_FILLED = "paper.order.filled"
+STOP_UPDATED = "paper.stop.updated"
 
 
 def canonical(event: dict) -> str:

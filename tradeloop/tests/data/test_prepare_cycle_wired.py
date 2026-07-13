@@ -95,3 +95,18 @@ def test_injected_client_overrides_flag(monkeypatch, tmp_path):
     injected = object()
     prepare_cycle.prepare("premarket", root=tmp_path, kite_client=injected)
     assert captured["kite_client"] is injected
+
+
+def test_portfolio_state_takes_latest_stop_update(tmp_path):
+    from tradeloop.lib.audit.ledger import Ledger, ORDER_FILLED, STOP_UPDATED
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.yaml").write_text("capital:\n  paper_starting_inr: 100000\n")
+    (tmp_path / "state").mkdir()
+    led = Ledger(tmp_path / "state" / "ledger.db")
+    led.append({"type": ORDER_FILLED, "order_id": "X1", "symbol": "HDFCBANK",
+                "side": "BUY", "quantity": 30, "fill_price": 830.62,
+                "product": "CNC", "hard_stop": 807.24})
+    led.append({"type": STOP_UPDATED, "symbol": "HDFCBANK", "hard_stop": 820.0})
+    state = prepare_cycle._portfolio_state(tmp_path)
+    assert state.hard_stops["HDFCBANK"] == 820.0
