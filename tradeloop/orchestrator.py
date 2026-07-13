@@ -338,6 +338,12 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
     if live_enabled() and not live_promotion_ready(root, settings):
         print("tradeloop_cycle=LIVE_NOT_READY")
         return 2
+    if mode in _MODE_DAGS and not _portfolio_state(root).positions:
+        # Holdings-focused modes have nothing to review on an empty book; skip
+        # before prepare/scan/LLM so it costs zero tokens. Premarket owns
+        # new-entry discovery and is never gated on holdings.
+        print("tradeloop_cycle=SKIP reason=no_holdings")
+        return 0
 
     with _global_lock(root) as acquired:
         if not acquired:

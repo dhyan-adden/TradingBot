@@ -270,3 +270,35 @@ def test_run_cycle_rejects_mode_mismatched_run_dir(monkeypatch, tmp_path) -> Non
     run_dir.mkdir(parents=True)
     rc = orchestrator.run_cycle("premarket", root=root, run_dir=run_dir)
     assert rc == 2
+
+
+def test_holdings_modes_skip_on_empty_book(monkeypatch, tmp_path, capsys) -> None:
+    # No holdings -> intraday/postclose have nothing to review; the cycle must
+    # skip BEFORE prepare/scan/LLM so an empty book costs zero tokens.
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def exploding(*a, **k):
+        raise AssertionError("must not run on an empty book")
+    monkeypatch.setattr(orchestrator, "_prepare", exploding)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", exploding)
+
+    for mode in ("intraday", "postclose"):
+        rc = orchestrator.run_cycle(mode, root=root)
+        assert rc == 0
+        assert "tradeloop_cycle=SKIP reason=no_holdings" in capsys.readouterr().out
+
+    # premarket must NOT be gated on holdings (discovery is its whole job)
+    def fake_reason(rd, mode, agent, timeout, **kwargs):
+        (rd / "orders.json").write_text(json.dumps(
+            {"mode": mode, "live_orders_enabled": False, "generated_by": "test",
+             "orders": [], "held": []}), encoding="utf-8")
+        return 0
+
+    def fake_prepare(mode, request="", root=None):
+        d = root / "runs" / f"empty_{mode}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    assert orchestrator.run_cycle("premarket", root=root) == 0
