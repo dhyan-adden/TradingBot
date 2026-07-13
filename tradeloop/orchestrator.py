@@ -22,13 +22,13 @@ from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.claude_client import ClaudeStageClient
 from tradeloop.lib.llm.client import LLMClient
-from tradeloop.lib.llm.schemas import PMDecision, TradePlan
+from tradeloop.lib.llm.schemas import HoldingsReview, Order, PMDecision, TradePlan
 from tradeloop.lib.risk.checks import RiskState
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.risk.sizing import apply_guardrails, position_size_from_stop
 from tradeloop.lib.util.holidays import is_nse_holiday
 from tradeloop.lib.util.ist_clock import IST
-from tradeloop.scripts.prepare_cycle import prepare as _prepare
+from tradeloop.scripts.prepare_cycle import _portfolio_state, prepare as _prepare
 
 ROOT = Path(__file__).resolve().parent
 
@@ -108,8 +108,55 @@ def _size_trade_plan(run_dir: Path, settings) -> None:
         encoding="utf-8")
 
 
+def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order], dict[str, float]]:
+    """Deterministic money-path derivation from the holdings review. Intraday
+    EXIT/TRIM verdicts become SELL orders priced at the snapshotted LTP;
+    TIGHTEN_STOP verdicts become tighten-only stop updates (applied at route
+    time, both modes). A held symbol whose LTP is at/below its recorded stop is
+    force-exited even if the review missed it: the stop was approved when the
+    position opened, so enforcing it is not a new decision. Postclose produces
+    no orders ever - the market is closed and a paper fill would be fiction."""
+    review = HoldingsReview.model_validate_json(
+        (run_dir / "15_holdings_review.json").read_text(encoding="utf-8"))
+    ltp_path = run_dir / "holdings_ltp.json"
+    ltps: dict[str, float] = {}
+    if ltp_path.exists():
+        ltps = {k.strip().upper(): float(v)
+                for k, v in json.loads(ltp_path.read_text(encoding="utf-8")).items()}
+    state = _portfolio_state(root)
+    positions, stops = state.positions, state.hard_stops
+    reviewed = {r.ticker.strip().upper(): r for r in review.reviews}
+
+    orders: list[Order] = []
+    if mode == "intraday":
+        for sym, r in reviewed.items():
+            qty, ltp = positions.get(sym, 0), ltps.get(sym)
+            if r.verdict not in ("EXIT", "TRIM") or qty <= 0 or not ltp:
+                continue  # no price or no position -> nothing routable
+            sell_qty = qty if r.verdict == "EXIT" else min(r.exit_quantity or 0, qty)
+            if sell_qty <= 0:
+                continue
+            orders.append(Order(ticker=sym, side="SELL", quantity=sell_qty, price=ltp,
+                                strategy_family="position_management",
+                                reason=f"{r.verdict.lower()}:{r.reason_code}"))
+        ordered = {o.ticker for o in orders}
+        for sym, qty in positions.items():
+            stop, ltp = stops.get(sym, 0.0), ltps.get(sym)
+            if qty > 0 and stop > 0 and ltp and ltp <= stop and sym not in ordered:
+                orders.append(Order(ticker=sym, side="SELL", quantity=qty, price=ltp,
+                                    strategy_family="position_management",
+                                    reason="exit:stop_breach_enforced"))
+
+    stop_updates: dict[str, float] = {}
+    for sym, r in reviewed.items():
+        if (r.verdict == "TIGHTEN_STOP" and r.new_stop
+                and positions.get(sym, 0) > 0 and r.new_stop > stops.get(sym, 0.0)):
+            stop_updates[sym] = float(r.new_stop)
+    return orders, stop_updates
+
+
 def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
-                   client=None, settings=None) -> int:
+                   client=None, settings=None, root: Path | None = None) -> int:
     """Dispatch reasoning to the selected backend's client, then run the one
     deterministic DAG. Both backends write a schema-valid orders.json; the route
     phase validates + gates it identically, so risk controls are backend-independent.
@@ -128,11 +175,12 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
                   else LLMClient(audit_path=run_dir / "llm_calls.jsonl"))
     generated_by = ("tradeloop.reasoning.claude" if backend == "claude"
                     else "tradeloop.reasoning.p1")
-    return _run_reasoning_dag(run_dir, mode, timeout, client, settings, generated_by)
+    return _run_reasoning_dag(run_dir, mode, timeout, client, settings, generated_by, root)
 
 
 def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
-                       settings=None, generated_by: str = "tradeloop.reasoning.p1") -> int:
+                       settings=None, generated_by: str = "tradeloop.reasoning.p1",
+                       root: Path | None = None) -> int:
     """Deterministic DAG: each stage returns a validated pydantic form written to
     run_dir/<stage>.json; Python - not the LLM - then serialises orders.json from
     the validated PMDecision. Client-agnostic: OpenRouter or Claude behind the same
@@ -171,6 +219,12 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
     if "41_pm_decision" in dag:
         pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
         orders, held = pm.orders, pm.held
+    elif "15_holdings_review" in dag:
+        orders, stop_updates = _holdings_actions(run_dir, mode,
+                                                 root or run_dir.parent.parent)
+        held = []
+        (run_dir / "stop_updates.json").write_text(
+            json.dumps(stop_updates, indent=2), encoding="utf-8")
     else:  # research-only adhoc: no PM stage ran, so there is nothing to route
         orders, held = [], []
     orders_file = {
@@ -230,7 +284,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             return 0
         run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
         rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds,
-                            settings=settings)
+                            settings=settings, root=root)
         if rc == -1:
             print("tradeloop_cycle=TIMEOUT")
             return 1

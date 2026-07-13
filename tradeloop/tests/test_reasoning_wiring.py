@@ -31,6 +31,12 @@ class StageFakeClient:
         return schema.model_validate(self.DEFAULTS[schema])
 
 
+def _root_settings(root):
+    (root / "config").mkdir(exist_ok=True)
+    (root / "config" / "settings.yaml").write_text(
+        "capital:\n  paper_starting_inr: 100000\n", encoding="utf-8")
+
+
 def _run_dir(tmp_path):
     d = tmp_path / "runs" / "2026-07-02_0800_premarket"
     d.mkdir(parents=True)
@@ -59,6 +65,7 @@ def test_postclose_skips_trade_stages_and_proposes_nothing(tmp_path):
     d.mkdir(parents=True)
     for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
         (d / f).write_text(f"# {f}\n")
+    _root_settings(tmp_path)  # holdings review reads the book at run_dir's root
     rc = orchestrator._run_reasoning(d, "postclose", "openrouter", 1200, client=StageFakeClient())
     assert rc == 0
     assert json.loads((d / "orders.json").read_text())["orders"] == []
@@ -76,6 +83,7 @@ def test_intraday_runs_pulse_dag_only(tmp_path):
     d.mkdir(parents=True)
     for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
         (d / f).write_text(f"# {f}\n")
+    _root_settings(tmp_path)  # holdings review reads the book at run_dir's root
     rc = orchestrator._run_reasoning(d, "intraday", "openrouter", 1200, client=StageFakeClient())
     assert rc == 0
     assert (d / "10_news.json").exists()
