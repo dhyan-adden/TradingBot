@@ -55,7 +55,9 @@ def evaluate(ticket: OrderTicket, state: RiskState, caps: RiskCaps) -> RiskDecis
         reasons.append("unsupported_product")
     if notional < caps.min_position_size_inr and ticket.side == "BUY":
         reasons.append("below_min_position_size")
-    if notional > caps.capital_inr * (caps.max_position_allocation_pct / 100):
+    # BUY-only: an appreciated position's exit notional can exceed the entry
+    # cap; the gate must never trap capital in a winner.
+    if notional > caps.capital_inr * (caps.max_position_allocation_pct / 100) and ticket.side == "BUY":
         reasons.append("max_position_allocation_exceeded")
     if state.open_risk_inr > caps.capital_inr * (caps.max_open_risk_pct / 100):
         reasons.append("max_open_risk_exceeded")

@@ -135,3 +135,18 @@ def test_malformed_orders_file_raises(tmp_path: Path) -> None:
     bad.write_text("{not json", encoding="utf-8")
     with pytest.raises(Exception):
         route_orders_file(bad, tmp_path / "fills.json", PaperBroker(100000), SETTINGS, root=ROOT)
+
+
+def test_sell_exempt_from_position_allocation_cap():
+    from tradeloop.lib.risk.checks import RiskCaps, RiskState, evaluate
+
+    state = RiskState(cash_inr=10000.0, positions={"CDSL": 100},
+                      avg_prices={"CDSL": 1000.0}, sectors={})
+    caps = RiskCaps(capital_inr=200000.0, max_open_positions=6,
+                    max_position_allocation_pct=25.0, max_total_deployed_pct=80.0,
+                    max_sector_allocation_pct=50.0, max_daily_drawdown_pct=3.0,
+                    universe=["CDSL"])
+    # position doubled: exit notional 150000 = 75% of capital, far over the 25% entry cap
+    ticket = OrderTicket(symbol="CDSL", side="SELL", quantity=100, price=1500.0)
+    verdict = evaluate(ticket, state, caps)
+    assert verdict.approved, verdict.reasons
