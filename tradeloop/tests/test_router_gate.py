@@ -150,3 +150,40 @@ def test_sell_exempt_from_position_allocation_cap():
     ticket = OrderTicket(symbol="CDSL", side="SELL", quantity=100, price=1500.0)
     verdict = evaluate(ticket, state, caps)
     assert verdict.approved, verdict.reasons
+
+
+def _unknown_sector_caps():
+    from tradeloop.lib.risk.checks import RiskCaps
+    return RiskCaps(capital_inr=100000.0, max_open_positions=6,
+                    max_position_allocation_pct=25.0, max_total_deployed_pct=90.0,
+                    max_sector_allocation_pct=50.0, max_daily_drawdown_pct=3.0,
+                    universe=["CDSL", "DLF", "ZOMATO", "TCS"])
+
+
+def test_unknown_sector_names_share_one_capped_bucket():
+    # 2026-07-13 debt: full-NSE holdings outside universe.yaml had no sector, so
+    # _sector_reason fell through and their concentration was INVISIBLE to the cap.
+    # Unknown-sector names now share one UNKNOWN pseudo-sector, bounded like any
+    # real sector - unmeasured concentration is treated as concentrated.
+    from tradeloop.lib.risk.checks import RiskState, evaluate
+
+    state = RiskState(cash_inr=55000.0, positions={"CDSL": 30, "DLF": 20},
+                      avg_prices={"CDSL": 1000.0, "DLF": 750.0}, sectors={})
+    # 45k unknown-sector held + 16k incoming unknown = 61% > 50% cap
+    ticket = OrderTicket(symbol="ZOMATO", side="BUY", quantity=16, price=1000.0)
+    verdict = evaluate(ticket, state, _unknown_sector_caps())
+    assert not verdict.approved
+    assert verdict.reasons == ["max_sector_allocation_exceeded"]
+
+
+def test_known_sector_buy_unaffected_by_unknown_bucket():
+    # The UNKNOWN bucket is its own sector: a known-sector buy is judged only
+    # against its own sector's true exposure, not the unknown holdings.
+    from tradeloop.lib.risk.checks import RiskState, evaluate
+
+    state = RiskState(cash_inr=55000.0, positions={"CDSL": 30, "DLF": 20},
+                      avg_prices={"CDSL": 1000.0, "DLF": 750.0},
+                      sectors={"TCS": "Information Technology"})
+    ticket = OrderTicket(symbol="TCS", side="BUY", quantity=16, price=1000.0)
+    verdict = evaluate(ticket, state, _unknown_sector_caps())
+    assert verdict.approved, verdict.reasons

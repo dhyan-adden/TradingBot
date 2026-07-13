@@ -148,9 +148,12 @@ def route_orders_file(
 ) -> list[RoutedOrder]:
     of = load_orders(orders_path)  # typed; raises on malformed -> cycle aborts loudly
     records = load_ticker_master(root / "config" / "universe.yaml")
-    # ponytail: sectors only cover the config base; full_scan.jsonl carries no
-    # sector, so the sector cap binds only where a sector is known. Add sector to
-    # the scan record to extend it to full-NSE names.
+    # Sectors are known only for the config base (universe.yaml); no data source
+    # carries a sector for the rest of the NSE (Kite instruments have none). The
+    # gate buckets every unknown-sector name as UNKNOWN and caps that bucket like
+    # any sector (checks._sector_reason), so out-of-universe holdings are never
+    # invisible to the concentration cap. ponytail: a real sector feed (e.g. NSE
+    # index-constituent CSVs) is the upgrade if the UNKNOWN bucket binds too often.
     sectors = {r.symbol.upper(): r.sector for r in records}
     # Eligible route universe = names actually scanned this cycle (trust the run's
     # scan under source=full_nse) + the config base + current holdings, so a held
