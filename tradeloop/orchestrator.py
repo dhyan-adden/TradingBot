@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from tradeloop.lib.audit import controls, reconcile
-from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger, LedgerTamperError
+from tradeloop.lib.audit.ledger import ORDER_FILLED, STOP_UPDATED, Ledger, LedgerTamperError
 from tradeloop.lib.audit.postclose import run_postclose_learning
 from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
@@ -511,6 +511,27 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
             stops = {o.ticker.strip().upper(): float(o.hard_stop)
                      for o in load_orders(orders_path).orders if o.hard_stop is not None}
             append_book(book_path, new_fills, hard_stops=stops)
+        # Stop updates ride the same approval as the orders (invoking route IS
+        # the approval). Tighten-only and held-only are re-checked here against
+        # the live post-fill book, so a full exit cancels its own stale tighten.
+        # Postclose may tighten stops (pure risk reduction, no fill involved)
+        # even though it can never fill an order.
+        stops_applied = 0
+        stop_path = run_dir / "stop_updates.json"
+        if stop_path.exists():
+            try:
+                updates = {str(k).strip().upper(): float(v) for k, v in
+                           json.loads(stop_path.read_text(encoding="utf-8")).items()}
+            except (ValueError, TypeError):
+                updates = {}
+            current: dict[str, float] = {}
+            for event in led.replay([ORDER_FILLED, STOP_UPDATED]):
+                if float(event.get("hard_stop", 0.0)) > 0:
+                    current[event["symbol"]] = float(event["hard_stop"])
+            for sym, new_stop in sorted(updates.items()):
+                if book.positions.get(sym, 0) > 0 and new_stop > current.get(sym, 0.0):
+                    led.append({"type": STOP_UPDATED, "symbol": sym, "hard_stop": new_stop})
+                    stops_applied += 1
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
         mode_blocked = sum(1 for r in routed if r.status == "MODE_DISALLOWED")
@@ -526,7 +547,8 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
                                  run_id=run_dir.name, timestamp=_now_iso(), live_ready=False)
         except Exception as exc:
             (run_dir / "audit_error.txt").write_text(f"postclose audit failed: {exc}\n", encoding="utf-8")
-        print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected} mode_blocked={mode_blocked}")
+        print(f"tradeloop_route=OK orders={len(routed)} filled={filled} rejected={rejected} "
+              f"mode_blocked={mode_blocked} stops_tightened={stops_applied}")
         return 0
 
 

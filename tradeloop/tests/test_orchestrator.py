@@ -206,3 +206,35 @@ def test_route_respects_kill_switch(monkeypatch, tmp_path) -> None:
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 0
     assert not (run_dir / "fills.json").exists()  # nothing routed
+
+
+def test_route_applies_tighten_only_stop_updates(monkeypatch, tmp_path) -> None:
+    # Stop updates ride the same approval as orders; tighten-only, held-only.
+    # Postclose may tighten (pure risk reduction) even though it fills nothing.
+    from tradeloop.lib.audit.ledger import ORDER_FILLED
+    from tradeloop.scripts.prepare_cycle import _portfolio_state
+
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    led = Ledger(root / "state" / "ledger.db")
+    led.append({"type": ORDER_FILLED, "order_id": "X1", "symbol": "HDFCBANK", "side": "BUY",
+                "quantity": 30, "fill_price": 830.62, "product": "CNC", "hard_stop": 807.24})
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+    (run_dir / "orders.json").write_text(json.dumps(
+        {"mode": "postclose", "live_orders_enabled": False,
+         "generated_by": "test", "orders": [], "held": []}), encoding="utf-8")
+    (run_dir / "stop_updates.json").write_text(json.dumps(
+        {"HDFCBANK": 820.0, "GHOST": 50.0}), encoding="utf-8")
+
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
+    state = _portfolio_state(root)
+    assert state.hard_stops["HDFCBANK"] == 820.0     # tightened
+    assert "GHOST" not in state.hard_stops           # unheld symbol ignored
+
+    # loosening attempt is a no-op (fills.json stays [], so re-route is allowed)
+    (run_dir / "stop_updates.json").write_text(json.dumps({"HDFCBANK": 700.0}), encoding="utf-8")
+    rc = orchestrator.route_cycle(run_dir, root=root)
+    assert rc == 0
+    assert _portfolio_state(root).hard_stops["HDFCBANK"] == 820.0
