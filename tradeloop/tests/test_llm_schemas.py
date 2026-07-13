@@ -117,3 +117,37 @@ def test_pm_decision_orders_match_order_shape():
                         "quantity": -1, "price": 10.0}],
             "held": [], "evidence": [],
         })
+
+
+def test_holdings_review_registered_for_stage():
+    assert schemas.SCHEMA_FOR_STAGE["15_holdings_review"] is schemas.HoldingsReview
+
+
+def test_holding_verdict_happy_paths():
+    hold = schemas.HoldingVerdict(ticker="CDSL", verdict="HOLD", conviction=6.0,
+                                  reason_code="thesis_intact", rationale="breakout intact")
+    assert hold.new_stop is None
+    tighten = schemas.HoldingVerdict(ticker="HDFCBANK", verdict="TIGHTEN_STOP", conviction=5.0,
+                                     reason_code="profit_protect", rationale="lock gain", new_stop=820.0)
+    assert tighten.new_stop == 820.0
+    trim = schemas.HoldingVerdict(ticker="SBIN", verdict="TRIM", conviction=3.0,
+                                  reason_code="event_risk", rationale="derisk", exit_quantity=10)
+    assert trim.exit_quantity == 10
+
+
+def test_tighten_stop_requires_new_stop():
+    with pytest.raises(ValidationError):
+        schemas.HoldingVerdict(ticker="HDFCBANK", verdict="TIGHTEN_STOP", conviction=5.0,
+                               reason_code="profit_protect", rationale="lock gain")
+
+
+def test_trim_requires_exit_quantity():
+    with pytest.raises(ValidationError):
+        schemas.HoldingVerdict(ticker="SBIN", verdict="TRIM", conviction=3.0,
+                               reason_code="event_risk", rationale="derisk")
+
+
+def test_holdings_review_evidence_filter_still_applies():
+    r = schemas.HoldingsReview(reviews=[], carry_forward="quiet day",
+                               evidence=["not-a-news-id", "a1b2c3d4e5f6"])
+    assert r.evidence == ["a1b2c3d4e5f6"]
