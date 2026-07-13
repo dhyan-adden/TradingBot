@@ -106,3 +106,26 @@ def test_cards_carry_the_model_that_actually_ran():
 def test_unknown_stage_returns_generic_card():
     view = render_stage("99_unknown", {"foo": "bar"})
     assert view.status == "done" and view.title
+
+
+def test_render_holdings_review_stage():
+    from tradeloop.dashboard.render import render_stage
+    raw = {"reviews": [
+        {"ticker": "HDFCBANK", "verdict": "HOLD", "conviction": 6.0,
+         "reason_code": "thesis_intact", "rationale": "steady into results"},
+        {"ticker": "SBIN", "verdict": "EXIT", "conviction": 2.0,
+         "reason_code": "stop_breach", "rationale": "closed under stop"},
+        {"ticker": "CDSL", "verdict": "TIGHTEN_STOP", "conviction": 6.5,
+         "reason_code": "profit_protect", "rationale": "lock the move", "new_stop": 1420.0},
+    ], "carry_forward": "watch HDFCBANK results"}
+    view = render_stage("15_holdings_review", raw)
+    assert "3 holdings" in view.summary
+    assert any(("SBIN" in p or "State Bank" in p) and "EXIT" in p for p in view.points)
+    assert any("1420.0" in p for p in view.points)
+    assert view.title == "Position Manager"
+
+
+def test_render_holdings_review_empty():
+    from tradeloop.dashboard.render import render_stage
+    view = render_stage("15_holdings_review", {"reviews": [], "carry_forward": ""})
+    assert "No holdings" in view.summary

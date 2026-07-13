@@ -43,6 +43,7 @@ STAGE_META: dict[str, tuple[str, str, str]] = {
     "12_fundamentals": ("book", "Health Expert", "Checks each company's financial health for red flags."),
     "13_technical": ("chart", "Chart Expert", "Reads the price charts to spot clean, tradeable setups."),
     "14_shortlist": ("list", "Shortlister", "Combines every expert's view into today's ranked list of candidates."),
+    "15_holdings_review": ("shield", "Position Manager", "Reviews every holding: keep it, tighten the stop, trim, or exit."),
     "20_bull": ("bull", "The Optimist", "Argues the strongest case FOR buying each candidate."),
     "21_bear": ("bear", "The Skeptic", "Argues the strongest case AGAINST each candidate."),
     "22_debate": ("scale", "The Judge", "Weighs optimist vs skeptic and rates each stock's conviction."),
@@ -275,6 +276,27 @@ def render_decision(orders_json: dict, model: str = "") -> StageView:
                      summary=summary, points=points, model=label_model(model))
 
 
+def _holdings_review(raw: dict) -> tuple[str, list[str]]:
+    rows = raw.get("reviews") or []
+    points = []
+    for r in rows:
+        extra = ""
+        if r.get("new_stop") is not None:
+            extra = f" new stop {r['new_stop']}"
+        if r.get("exit_quantity") is not None:
+            extra = f" sell {r['exit_quantity']}"
+        points.append(f"{pretty_ticker(r.get('ticker',''))}: {r.get('verdict','')}"
+                      f" ({r.get('reason_code','')}){extra} - {r.get('rationale','')}")
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r.get("verdict", "?")] = counts.get(r.get("verdict", "?"), 0) + 1
+    breakdown = ", ".join(f"{n} {v}" for v, n in sorted(counts.items()))
+    summary = (f"{len(rows)} holdings reviewed: {breakdown}." if rows
+               else "No holdings to review.")
+    return summary, points
+
+
+_ANALYSIS_BUILDERS["15_holdings_review"] = _holdings_review
 _ANALYSIS_BUILDERS["30_trade_plan"] = _trade_plan
 _ANALYSIS_BUILDERS["40_risk_report"] = _risk
 

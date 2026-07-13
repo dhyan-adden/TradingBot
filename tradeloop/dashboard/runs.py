@@ -8,7 +8,8 @@ from tradeloop.dashboard.render import render_debate, render_decision, render_st
 
 STAGE_ORDER = [
     "10_news", "11_sentiment", "12_fundamentals", "13_technical", "14_shortlist",
-    "20_bull", "21_bear", "22_debate", "30_trade_plan", "40_risk_report",
+    "15_holdings_review", "20_bull", "21_bear", "22_debate", "30_trade_plan",
+    "40_risk_report",
 ]
 
 IN_FLIGHT = "Still running - no decision yet."
