@@ -13,6 +13,7 @@ class StageFakeClient:
         schemas.FundamentalsReport: {"tags": [], "evidence": []},
         schemas.TechnicalReport: {"setups": [], "evidence": []},
         schemas.Shortlist: {"candidates": [], "evidence": []},
+        schemas.HoldingsReview: {"reviews": [], "carry_forward": "", "evidence": []},
         schemas.BullCase: {"arguments": [], "evidence": []},
         schemas.BearCase: {"arguments": [], "evidence": []},
         schemas.Debate: {"names": [], "evidence": []},
@@ -63,6 +64,27 @@ def test_postclose_skips_trade_stages_and_proposes_nothing(tmp_path):
     assert json.loads((d / "orders.json").read_text())["orders"] == []
     assert not (d / "30_trade_plan.json").exists()
     assert not (d / "41_pm_decision.json").exists()
+    # discovery is gone from postclose; the review ran instead
+    assert not (d / "14_shortlist.json").exists()
+    assert not (d / "22_debate.json").exists()
+    assert (d / "15_holdings_review.json").exists()
+    assert (d / "11_sentiment.json").exists()      # postclose keeps the deep read
+
+
+def test_intraday_runs_pulse_dag_only(tmp_path):
+    d = tmp_path / "runs" / "2026-07-14_1400_intraday"
+    d.mkdir(parents=True)
+    for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
+        (d / f).write_text(f"# {f}\n")
+    rc = orchestrator._run_reasoning(d, "intraday", "openrouter", 1200, client=StageFakeClient())
+    assert rc == 0
+    assert (d / "10_news.json").exists()
+    assert (d / "13_technical.json").exists()
+    assert (d / "15_holdings_review.json").exists()
+    assert not (d / "11_sentiment.json").exists()   # fundamentals/sentiment do not change intraday
+    assert not (d / "12_fundamentals.json").exists()
+    assert not (d / "14_shortlist.json").exists()
+    assert json.loads((d / "orders.json").read_text())["orders"] == []
 
 
 def _adhoc_client(required_stages):

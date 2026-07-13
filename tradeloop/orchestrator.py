@@ -32,13 +32,20 @@ from tradeloop.scripts.prepare_cycle import prepare as _prepare
 
 ROOT = Path(__file__).resolve().parent
 
-# Order-producing stages and the modes allowed to run them. intraday (manage-only)
-# and postclose (no trading) skip these: the trader is a long-only NEW-ENTRY
-# discovery engine with no exit logic, so it could only emit forbidden new entries.
-# Skipping yields orders=[] with no wasted model calls; router._sides_for_mode is the
-# hard enforcement at route time.
-_TRADE_STAGES = {"30_trade_plan", "40_risk_report", "41_pm_decision"}
-_ORDER_MODES = {"premarket", "adhoc"}
+# Non-order modes (everything but premarket/adhoc) run a holdings-focused DAG:
+# no discovery (shortlist/debate) and no trader/risk/PM order stages, ending in
+# the holdings review. Intraday is a cheap pulse (news delta + chart health);
+# postclose re-underwrites the book with sentiment + fundamentals too. The
+# router's _sides_for_mode stays the hard order-policy enforcement at route time.
+_MODE_DAGS = {
+    "intraday": ["10_news", "13_technical", "15_holdings_review"],
+    "postclose": ["10_news", "11_sentiment", "12_fundamentals",
+                  "13_technical", "15_holdings_review"],
+}
+
+
+def _dag_for_mode(mode: str) -> list[str]:
+    return list(_MODE_DAGS.get(mode, stages.DAG))
 
 
 def _gate_holiday(today: date) -> str | None:
@@ -132,7 +139,7 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
     loop (route_orders_file reads the OrdersFile shape and runs evaluate() on every order)."""
     deadline = time.monotonic() + timeout  # bound the DAG exactly as P0's subprocess timeout= did
 
-    dag = list(stages.DAG)
+    dag = _dag_for_mode(mode)
     if mode == "adhoc" and (run_dir / "user_request.md").exists():
         if time.monotonic() > deadline:
             return -1
@@ -146,9 +153,6 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
         wanted = {s.removesuffix(".md") for s in intake.required_stages}
         if wanted:
             dag = [s for s in dag if s in wanted]
-    if mode not in _ORDER_MODES:  # intraday/postclose: no order stages (see _TRADE_STAGES)
-        # ponytail: wire a real manage/exit path here when intraday needs to trim positions.
-        dag = [s for s in dag if s not in _TRADE_STAGES]
 
     for name in dag:
         if time.monotonic() > deadline:
