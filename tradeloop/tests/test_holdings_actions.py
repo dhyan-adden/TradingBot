@@ -118,3 +118,37 @@ def test_run_reasoning_dag_writes_sells_and_stop_updates(tmp_path):
     assert orders["orders"][0]["side"] == "SELL"
     assert orders["orders"][0]["quantity"] == 30
     assert json.loads((d / "stop_updates.json").read_text()) == {}
+
+
+def _review_obj(**kw):
+    from tradeloop.lib.llm.schemas import HoldingsReview
+    base = {"reviews": [{"ticker": "HDFCBANK", "verdict": "HOLD", "conviction": 6.0,
+                         "reason_code": "thesis_intact", "rationale": "steady", "evidence": []}],
+            "carry_forward": "Q1 results Wednesday; hold through print.", "evidence": []}
+    base.update(kw)
+    return HoldingsReview.model_validate(base)
+
+
+def test_carry_forward_written_and_replaced_not_appended(tmp_path):
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "carry_forward_context.md").write_text(
+        "- manual note: SBIN tripwire 1019\n", encoding="utf-8")
+    orchestrator._write_carry_forward(mem, "2026-07-14_1400_intraday", _review_obj())
+    orchestrator._write_carry_forward(mem, "2026-07-14_1600_postclose", _review_obj(
+        carry_forward="All quiet after close."))
+    text = (mem / "carry_forward_context.md").read_text(encoding="utf-8")
+    assert "manual note: SBIN tripwire 1019" in text          # manual content survives
+    assert text.count("auto:holdings_review:start") == 1       # replaced, not stacked
+    assert "2026-07-14_1600_postclose" in text                 # latest run wins
+    assert "2026-07-14_1400_intraday" not in text
+    assert "All quiet after close." in text
+    assert "HDFCBANK: HOLD" in text
+
+
+def test_carry_forward_created_when_file_missing(tmp_path):
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    orchestrator._write_carry_forward(mem, "2026-07-14_1600_postclose", _review_obj())
+    text = (mem / "carry_forward_context.md").read_text(encoding="utf-8")
+    assert "auto:holdings_review:start" in text

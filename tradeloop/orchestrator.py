@@ -155,6 +155,39 @@ def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order]
     return orders, stop_updates
 
 
+_CF_START = "<!-- auto:holdings_review:start -->"
+_CF_END = "<!-- auto:holdings_review:end -->"
+
+
+def _write_carry_forward(memory_root: Path, run_id: str, review: HoldingsReview) -> None:
+    """Replace the single auto holdings-review block in carry_forward_context.md.
+    prepare_cycle injects this file into every 00_context, so this is the wire
+    that makes a postclose verdict actionable at the next premarket. Manual
+    notes outside the markers are never touched; the block is replaced, not
+    appended, so the context cannot grow without bound."""
+    path = memory_root / "carry_forward_context.md"
+    lines = [f"### Holdings review ({run_id})", ""]
+    for r in review.reviews:
+        extra = ""
+        if r.verdict == "TIGHTEN_STOP" and r.new_stop:
+            extra = f" new_stop={r.new_stop}"
+        if r.verdict == "TRIM" and r.exit_quantity:
+            extra = f" exit_quantity={r.exit_quantity}"
+        lines.append(f"- {r.ticker}: {r.verdict} ({r.reason_code}, "
+                     f"conviction {r.conviction}){extra} - {r.rationale}")
+    if review.carry_forward.strip():
+        lines += ["", review.carry_forward.strip()]
+    block = "\n".join([_CF_START, *lines, _CF_END])
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    if _CF_START in text and _CF_END in text:
+        pre, rest = text.split(_CF_START, 1)
+        _, post = rest.split(_CF_END, 1)
+        text = pre + block + post
+    else:
+        text = (text.rstrip() + "\n\n" if text.strip() else "") + block + "\n"
+    path.write_text(text, encoding="utf-8")
+
+
 def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
                    client=None, settings=None, root: Path | None = None) -> int:
     """Dispatch reasoning to the selected backend's client, then run the one
@@ -300,6 +333,16 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         except Exception:
             print("tradeloop_cycle=ORDERS_INVALID")
             return 1
+
+        review_path = run_dir / "15_holdings_review.json"
+        if review_path.exists():
+            try:
+                _write_carry_forward(root / "memory", run_dir.name,
+                                     HoldingsReview.model_validate_json(
+                                         review_path.read_text(encoding="utf-8")))
+            except Exception as exc:  # analysis plumbing must not fail the cycle
+                (run_dir / "carry_forward_error.txt").write_text(
+                    f"carry-forward write failed: {exc}\n", encoding="utf-8")
 
         snap = load_snapshot(run_dir)
         if snap is not None:
