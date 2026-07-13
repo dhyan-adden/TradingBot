@@ -65,6 +65,39 @@ def test_postclose_skips_trade_stages_and_proposes_nothing(tmp_path):
     assert not (d / "41_pm_decision.json").exists()
 
 
+def _adhoc_client(required_stages):
+    client = StageFakeClient()
+    client.DEFAULTS = dict(StageFakeClient.DEFAULTS)
+    client.DEFAULTS[schemas.AdhocIntake] = {
+        "classification": "ticker_dossier", "safe_interpretation": "research",
+        "required_stages": required_stages, "refused_parts": [],
+    }
+    return client
+
+
+def test_adhoc_intake_prunes_dag_to_named_artifacts(tmp_path):
+    d = _run_dir(tmp_path)
+    (d / "user_request.md").write_text("# User Request\n\nresearch RELIANCE\n")
+    rc = orchestrator._run_reasoning(d, "adhoc", "openrouter", 1200,
+                                     client=_adhoc_client(["10_news.md", "13_technical.md"]))
+    assert rc == 0
+    assert (d / "10_news.json").exists() and (d / "13_technical.json").exists()
+    assert not (d / "22_debate.json").exists()
+
+
+def test_adhoc_intake_junk_stage_names_fail_loud_not_hollow(tmp_path):
+    # live 2026-07-13_1246_adhoc: descriptive stage names silently emptied the
+    # DAG and the cycle completed as a clean-looking no-orders run. Junk must
+    # now die at schema validation -> REASONING_FAILED, never a hollow success.
+    d = _run_dir(tmp_path)
+    (d / "user_request.md").write_text("# User Request\n\nresearch RELIANCE\n")
+    rc = orchestrator._run_reasoning(d, "adhoc", "openrouter", 1200,
+                                     client=_adhoc_client(["news_catalyst_research"]))
+    assert rc == -2
+    assert (d / "reasoning_error.txt").exists()
+    assert not (d / "10_news.json").exists()  # nothing pretended to run
+
+
 def test_claude_backend_runs_dag_in_process(tmp_path):
     # The claude backend now runs the SAME deterministic DAG as openrouter, with a
     # ClaudeStageClient. With an injected fake client it must produce the canonical

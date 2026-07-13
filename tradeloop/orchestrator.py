@@ -15,7 +15,7 @@ from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings, risk_caps
-from tradeloop.lib.data.evidence import validate_evidence
+from tradeloop.lib.data.evidence import uncited_news_candidates, validate_evidence
 from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.data.ticker_master import load_ticker_master
@@ -136,7 +136,13 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
     if mode == "adhoc" and (run_dir / "user_request.md").exists():
         if time.monotonic() > deadline:
             return -1
-        intake = stages.run_stage("05_adhoc_intake", run_dir, client)
+        try:
+            intake = stages.run_stage("05_adhoc_intake", run_dir, client)
+        except Exception as exc:  # same record-loudly contract as the DAG loop:
+            # a bad intake must fail the cycle, not crash out or prune it hollow
+            (run_dir / "reasoning_error.txt").write_text(
+                f"reasoning failed at 05_adhoc_intake: {exc}\n", encoding="utf-8")
+            return -2
         wanted = {s.removesuffix(".md") for s in intake.required_stages}
         if wanted:
             dag = [s for s in dag if s in wanted]
@@ -243,6 +249,13 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             if not ev.ok:
                 print(f"tradeloop_cycle=EVIDENCE_INVALID missing={len(ev.missing)} run_dir={run_dir}")
                 return 1
+
+        # Heuristic tripwire (warn, never block): news-track shortlist names
+        # with zero citations anywhere means the citation chain may have gone
+        # silent - a shape the evidence gate above cannot see.
+        suspect = uncited_news_candidates(run_dir)
+        if suspect:
+            print(f"tradeloop_warning=UNCITED_NEWS_CANDIDATES tickers={','.join(suspect)} run_dir={run_dir}")
 
         # Price grounding: entry/hard_stop must match the frozen scanner levels,
         # not numbers the model invented from a news headline. Skipped when the

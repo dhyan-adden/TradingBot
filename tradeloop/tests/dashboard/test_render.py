@@ -1,5 +1,5 @@
 from tradeloop.dashboard.render import (
-    STAGE_META, GLOSSARY, pretty_ticker, render_stage, StageView,
+    STAGE_META, GLOSSARY, pretty_ticker, render_debate, render_stage, StageView,
 )
 
 
@@ -42,6 +42,50 @@ def test_shortlist_card_ranks_candidates():
     view = render_stage("14_shortlist", raw)
     assert "2" in view.summary  # count of candidates
     assert view.points[0].startswith("HDFC Bank")  # highest score first
+
+
+def test_debate_card_shows_the_judges_rationale():
+    raw = {"names": [{"ticker": "HDFCBANK", "conviction": 6.0, "verdict": "watch",
+                      "rationale": "bear's earnings-risk point outweighs the buy call"}]}
+    view = render_stage("22_debate", raw)
+    assert any("bear's earnings-risk point" in p for p in view.points)
+
+
+def test_debate_card_renders_legacy_runs_without_rationale():
+    # pre-rationale archives must render exactly as before, no trailing separator
+    raw = {"names": [{"ticker": "SBIN", "conviction": 4.0, "verdict": "pass"}]}
+    view = render_stage("22_debate", raw)
+    assert view.points == ["State Bank of India: passed on (conviction 4.0/10)"]
+
+
+def test_debate_card_carries_the_complete_exchange_per_name():
+    # the full recorded debate: bull claims + bear claims grouped under each
+    # name's verdict, in the judge's order - not scattered across three cards
+    debate = {"names": [
+        {"ticker": "UTIAMC", "conviction": 6.0, "verdict": "tradeable", "rationale": "risk tightest"},
+        {"ticker": "HEG", "conviction": 5.5, "verdict": "tradeable"},
+    ]}
+    bull = {"arguments": [
+        {"ticker": "UTIAMC", "claim": "volume-confirmed breakout"},
+        {"ticker": "UTIAMC", "claim": "3.5% stop"},
+        {"ticker": "HEG", "claim": "clean structure"},
+    ]}
+    bear = {"arguments": [{"ticker": "UTIAMC", "claim": "beta rally risk"}]}
+    view = render_debate(debate, bull, bear)
+    assert view.points == [
+        "UTIAMC: green-lit to trade (conviction 6.0/10) - risk tightest",
+        "For: volume-confirmed breakout",
+        "For: 3.5% stop",
+        "Against: beta rally risk",
+        "HEG: green-lit to trade (conviction 5.5/10)",
+        "For: clean structure",
+    ]
+
+
+def test_debate_card_without_bull_bear_falls_back_to_verdicts():
+    debate = {"names": [{"ticker": "SBIN", "conviction": 4.0, "verdict": "pass"}]}
+    view = render_debate(debate, None, None)
+    assert view.points == ["State Bank of India: passed on (conviction 4.0/10)"]
 
 
 def test_glossary_has_core_terms():

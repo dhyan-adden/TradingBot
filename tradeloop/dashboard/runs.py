@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from tradeloop.dashboard.render import render_decision, render_stage
+from tradeloop.dashboard.render import render_debate, render_decision, render_stage
 
 STAGE_ORDER = [
     "10_news", "11_sentiment", "12_fundamentals", "13_technical", "14_shortlist",
@@ -80,11 +80,18 @@ def read_run(run_dir: Path) -> dict:
     run_dir = Path(run_dir)
     models = _stage_models(run_dir)
     stages = []
+    raws: dict[str, dict] = {}
     for stage in STAGE_ORDER:
         raw = _load(run_dir / f"{stage}.json")
         if raw is None:
             continue  # not written yet
-        stages.append(asdict(render_stage(stage, raw, models.get(stage, ""))))
+        raws[stage] = raw
+        if stage == "22_debate":  # the Judge's card carries the full exchange
+            view = render_debate(raw, raws.get("20_bull"), raws.get("21_bear"),
+                                 models.get(stage, ""))
+        else:
+            view = render_stage(stage, raw, models.get(stage, ""))
+        stages.append(asdict(view))
     orders = _load(run_dir / "orders.json") or {}
     decision = asdict(render_decision(orders, models.get("41_pm_decision", "")))
     err_path = run_dir / "reasoning_error.txt"

@@ -48,6 +48,43 @@ def test_debate_verdict_enum_enforced():
         })
 
 
+def test_adhoc_required_stages_rejects_descriptive_names():
+    # live 2026-07-13_1246_adhoc: the intake returned descriptive names like
+    # "news_catalyst_research"; the unconstrained list[str] validated, the DAG
+    # pruning intersection went empty, and the cycle completed hollow
+    with pytest.raises(ValidationError):
+        schemas.AdhocIntake.model_validate({
+            "classification": "full_trade_request", "safe_interpretation": "x",
+            "required_stages": ["news_catalyst_research", "bull_vs_bear_debate"],
+        })
+
+
+def test_adhoc_required_stages_accepts_real_artifact_names():
+    intake = schemas.AdhocIntake.model_validate({
+        "classification": "ticker_dossier", "safe_interpretation": "x",
+        "required_stages": ["10_news.md", "13_technical.md", "22_debate.md"],
+    })
+    assert intake.required_stages == ["10_news.md", "13_technical.md", "22_debate.md"]
+
+
+def test_adhoc_required_stages_literal_stays_in_sync_with_dag():
+    from typing import get_args
+    from tradeloop.lib.llm import stages
+    literal = get_args(schemas.AdhocIntake.model_fields["required_stages"].annotation)[0]
+    assert set(get_args(literal)) == {f"{s}.md" for s in stages.DAG}
+
+
+def test_debate_verdict_rationale_defaults_empty_for_legacy_payloads():
+    # pre-rationale archives (and a model that omits it) must still validate
+    d = schemas.Debate.model_validate({
+        "names": [{"ticker": "TCS", "conviction": 6.0, "verdict": "watch"}]})
+    assert d.names[0].rationale == ""
+    d = schemas.Debate.model_validate({
+        "names": [{"ticker": "TCS", "conviction": 6.0, "verdict": "watch",
+                   "rationale": "bear case decisive"}]})
+    assert d.names[0].rationale == "bear case decisive"
+
+
 def test_trade_plan_is_long_only():
     with pytest.raises(ValidationError):
         schemas.TradePlan.model_validate({

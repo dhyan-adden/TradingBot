@@ -27,6 +27,8 @@
   .gain { color: #1a7f4b; } .loss { color: #b3362c; }
   .pricenote { color: #888; font-size: 12px; }
   .side { font-size: 12px; border-radius: 6px; padding: 1px 7px; background: #eef1f5; }
+  li.arg { list-style: none; margin: 3px 0 3px 10px; color: #444; }
+  li.arg .side { font-size: 10px; font-weight: 650; }
 </style>
 <h1>TradeLoop - what the bot is thinking</h1>
 <div id="bar">
@@ -76,8 +78,16 @@ async function poll() {
   }
 }
 
+function point(p) {
+  if (p.startsWith('For: '))
+    return '<li class="arg"><span class="side gain">FOR</span> ' + escapeHtml(p.slice(5)) + '</li>';
+  if (p.startsWith('Against: '))
+    return '<li class="arg"><span class="side loss">AGAINST</span> ' + escapeHtml(p.slice(9)) + '</li>';
+  return '<li>' + escapeHtml(p) + '</li>';
+}
+
 function card(s, extraClass) {
-  const points = (s.points || []).map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  const points = (s.points || []).map(point).join('');
   const model = s.model ? '<span class="model">' + escapeHtml(s.model) + '</span>' : '';
   return '<div class="card ' + (extraClass || '') + '">'
     + '<div class="cardhead"><h3>' + escapeHtml(s.title) + '</h3>' + model + '</div>'

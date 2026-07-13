@@ -110,6 +110,35 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
     assert rc == 1
 
 
+def test_uncited_news_candidates_warns_but_never_blocks(monkeypatch, tmp_path, capsys) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def fake_prepare(mode, request="", root=None):
+        run_dir = root / "runs" / f"warn_{mode}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
+        # news-track candidate on the shortlist, yet zero citations anywhere:
+        # the one shape the citation tripwire must flag - without failing the run
+        (run_dir / "14_shortlist.json").write_text(json.dumps({
+            "evidence": [],
+            "candidates": [{"ticker": "SBIN", "source_track": "tier_a"}]}),
+            encoding="utf-8")
+        (run_dir / "orders.json").write_text(json.dumps({"orders": []}), encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    rc = orchestrator.run_cycle("premarket", root=root)
+    out = capsys.readouterr().out
+    assert rc == 0                                   # heuristic: warn, never block
+    assert "tradeloop_warning=UNCITED_NEWS_CANDIDATES" in out
+    assert "SBIN" in out
+    assert "tradeloop_cycle=AWAITING_APPROVAL" in out
+
+
 def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     root = _fresh_root(tmp_path)
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))

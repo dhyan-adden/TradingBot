@@ -176,14 +176,47 @@ def _args(raw: dict, lead: str) -> tuple[str, list[str]]:
     return summary, points
 
 
+def _verdict_line(n: dict) -> str:
+    return (f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(n.get('verdict'), n.get('verdict',''))} "
+            f"(conviction {n.get('conviction','?')}/10)"
+            + (f" - {n['rationale']}" if n.get("rationale") else ""))
+
+
+def _debate_summary(names: list[dict]) -> str:
+    tradeable = [n for n in names if n.get("verdict") == "tradeable"]
+    return (f"{len(tradeable)} name(s) green-lit to trade." if tradeable
+            else "Cautious today - nothing green-lit to trade.")
+
+
 def _debate(raw: dict) -> tuple[str, list[str]]:
     names = raw.get("names") or []
-    points = [f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(n.get('verdict'), n.get('verdict',''))} "
-              f"(conviction {n.get('conviction','?')}/10)" for n in names]
-    tradeable = [n for n in names if n.get("verdict") == "tradeable"]
-    summary = (f"{len(tradeable)} name(s) green-lit to trade." if tradeable
-               else "Cautious today - nothing green-lit to trade.")
-    return summary, (points or ["No names debated."])
+    points = [_verdict_line(n) for n in names]
+    return _debate_summary(names), (points or ["No names debated."])
+
+
+def _claims_by_ticker(case: dict | None) -> dict[str, list[str]]:
+    claims: dict[str, list[str]] = {}
+    for a in ((case or {}).get("arguments") or []):
+        claims.setdefault((a.get("ticker") or "").upper(), []).append(a.get("claim", ""))
+    return claims
+
+
+def render_debate(raw: dict, bull: dict | None = None, bear: dict | None = None,
+                  model: str = "") -> StageView:
+    """The Judge's card with the complete recorded exchange: each name's verdict
+    followed by the bull's and bear's claims for it, in the judge's order."""
+    icon, title, role = _meta("22_debate")
+    names = (raw or {}).get("names") or []
+    bull_by, bear_by = _claims_by_ticker(bull), _claims_by_ticker(bear)
+    points: list[str] = []
+    for n in names:
+        t = (n.get("ticker") or "").upper()
+        points.append(_verdict_line(n))
+        points += [f"For: {c}" for c in bull_by.get(t, [])]
+        points += [f"Against: {c}" for c in bear_by.get(t, [])]
+    return StageView(stage="22_debate", icon=icon, title=title, role=role,
+                     summary=_debate_summary(names),
+                     points=points or ["No names debated."], model=label_model(model))
 
 
 _ANALYSIS_BUILDERS = {

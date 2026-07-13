@@ -56,7 +56,14 @@ class AdhocIntake(BaseModel):
         "portfolio_management", "full_trade_request",
     ]
     safe_interpretation: str
-    required_stages: list[str] = Field(default_factory=list)
+    # Exact DAG artifact filenames (mirrors stages.DAG; a sync test enforces it).
+    # Live 2026-07-13: an unconstrained list[str] let descriptive names through,
+    # the pruning intersection went empty, and the whole cycle ran hollow.
+    required_stages: list[Literal[
+        "10_news.md", "11_sentiment.md", "12_fundamentals.md", "13_technical.md",
+        "14_shortlist.md", "20_bull.md", "21_bear.md", "22_debate.md",
+        "30_trade_plan.md", "40_risk_report.md", "41_pm_decision.md",
+    ]] = Field(default_factory=list)
     refused_parts: list[str] = Field(default_factory=list)
 
 
@@ -144,6 +151,11 @@ class DebateVerdict(EvidenceMixin):
     ticker: str
     conviction: float = Field(ge=0, le=10)
     verdict: Literal["tradeable", "watch", "pass"]
+    rationale: str = Field(
+        default="",  # pre-rationale run archives must keep validating
+        description="One sentence naming the decisive bull or bear point that "
+                    "set this verdict.",
+    )
 
 
 class Debate(EvidenceMixin):

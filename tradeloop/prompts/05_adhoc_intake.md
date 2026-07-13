@@ -35,7 +35,10 @@ Output:
 [what TradeLoop will do]
 
 ## Required Stages
-[ordered list of downstream files to write]
+[ordered subset of exactly these filenames - no other values are valid:
+`10_news.md`, `11_sentiment.md`, `12_fundamentals.md`, `13_technical.md`,
+`14_shortlist.md`, `20_bull.md`, `21_bear.md`, `22_debate.md`,
+`30_trade_plan.md`, `40_risk_report.md`, `41_pm_decision.md`]
 
 ## Refused Or Ignored Parts
 [unsafe or out-of-scope pieces, if any]
