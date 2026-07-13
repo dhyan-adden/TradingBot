@@ -146,3 +146,46 @@ def test_unknown_backend_raises(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         orchestrator._run_reasoning(tmp_path, "premarket", "codex", 5)
+
+
+class CountingFakeClient(StageFakeClient):
+    """StageFakeClient that records which roles were actually billed."""
+    def __init__(self):
+        self.calls = []
+
+    def call_json(self, role, system, user, schema, model=None):
+        self.calls.append(role)
+        return super().call_json(role, system, user, schema, model)
+
+
+def test_resume_skips_completed_stages(tmp_path):
+    # A crash/restart must not re-pay for stages whose validated artifact exists.
+    d = tmp_path / "runs" / "2026-07-14_1600_postclose"
+    d.mkdir(parents=True)
+    for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
+        (d / f).write_text(f"# {f}\n")
+    _root_settings(tmp_path)
+    (d / "10_news.json").write_text(
+        json.dumps({"macro_context": "done earlier", "names_in_play": [],
+                    "macro_themes": [], "evidence": []}), encoding="utf-8")
+    client = CountingFakeClient()
+    rc = orchestrator._run_reasoning(d, "postclose", "openrouter", 1200, client=client)
+    assert rc == 0
+    assert "10_news" not in client.calls                  # skipped, not re-billed
+    assert {"11_sentiment", "12_fundamentals", "13_technical",
+            "15_holdings_review"} <= set(client.calls)
+    # the pre-existing artifact was preserved, not overwritten
+    assert json.loads((d / "10_news.json").read_text())["macro_context"] == "done earlier"
+
+
+def test_resume_reruns_half_written_artifact(tmp_path):
+    d = tmp_path / "runs" / "2026-07-14_1600_postclose"
+    d.mkdir(parents=True)
+    for f in ("00_context.md", "01_news_raw.md", "02_setups_raw.md"):
+        (d / f).write_text(f"# {f}\n")
+    _root_settings(tmp_path)
+    (d / "10_news.json").write_text('{"macro_context": "truncated', encoding="utf-8")
+    client = CountingFakeClient()
+    rc = orchestrator._run_reasoning(d, "postclose", "openrouter", 1200, client=client)
+    assert rc == 0
+    assert "10_news" in client.calls   # invalid artifact -> stage re-runs

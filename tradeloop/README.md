@@ -49,9 +49,18 @@ inputs and writes one named output in `runs/<timestamp>_<mode>/`.
 
 ## Manual Run
 
+Always launch manual cycles detached so they survive the launching terminal or
+agent session dying (cron-owned runs are already detached):
+
 ```bash
-./tradeloop/scripts/verify_setup.py --mode premarket
-./tradeloop/scripts/run_cycle.sh premarket
+./tradeloop/scripts/run_detached.sh premarket --backend claude
+```
+
+If a cycle is interrupted anyway, resume it in place - stages with validated
+artifacts are skipped, never re-billed:
+
+```bash
+./tradeloop/scripts/run_detached.sh postclose --backend claude tradeloop/runs/<dir>
 ```
 
 Cron examples are in `scripts/crontab.txt`.

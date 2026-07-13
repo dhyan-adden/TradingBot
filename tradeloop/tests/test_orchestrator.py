@@ -238,3 +238,35 @@ def test_route_applies_tighten_only_stop_updates(monkeypatch, tmp_path) -> None:
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 0
     assert _portfolio_state(root).hard_stops["HDFCBANK"] == 820.0
+
+
+def test_run_cycle_resumes_existing_run_dir_without_prepare(monkeypatch, tmp_path) -> None:
+    # --run-dir: a killed cycle is completed in place; prepare must NOT run
+    # (a new run dir would re-bill every stage).
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+
+    def exploding_prepare(mode, request="", root=None):
+        raise AssertionError("prepare must not run on resume")
+
+    def fake_reason(rd, mode, agent, timeout, **kwargs):
+        (rd / "orders.json").write_text(json.dumps(
+            {"mode": mode, "live_orders_enabled": False, "generated_by": "test",
+             "orders": [], "held": []}), encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_prepare", exploding_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    rc = orchestrator.run_cycle("postclose", root=root, run_dir=run_dir)
+    assert rc == 0
+
+
+def test_run_cycle_rejects_mode_mismatched_run_dir(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "2026-07-14_1600_postclose"
+    run_dir.mkdir(parents=True)
+    rc = orchestrator.run_cycle("premarket", root=root, run_dir=run_dir)
+    assert rc == 2

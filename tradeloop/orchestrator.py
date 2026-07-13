@@ -22,7 +22,7 @@ from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.claude_client import ClaudeStageClient
 from tradeloop.lib.llm.client import LLMClient
-from tradeloop.lib.llm.schemas import HoldingsReview, Order, PMDecision, TradePlan
+from tradeloop.lib.llm.schemas import AdhocIntake, HoldingsReview, Order, PMDecision, TradePlan
 from tradeloop.lib.risk.checks import RiskState
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.risk.sizing import apply_guardrails, position_size_from_stop
@@ -155,6 +155,20 @@ def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order]
     return orders, stop_updates
 
 
+def _stage_done(run_dir: Path, name: str) -> bool:
+    """Resume guard: a stage whose validated .json artifact already exists is
+    not re-run, so completing an interrupted run never re-pays for finished
+    model calls. A half-written artifact fails validation and re-runs."""
+    path = run_dir / f"{name}.json"
+    if not path.exists():
+        return False
+    try:
+        stages.SCHEMA_FOR_STAGE[name].model_validate_json(path.read_text(encoding="utf-8"))
+        return True
+    except Exception:
+        return False
+
+
 _CF_START = "<!-- auto:holdings_review:start -->"
 _CF_END = "<!-- auto:holdings_review:end -->"
 
@@ -225,7 +239,11 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
         if time.monotonic() > deadline:
             return -1
         try:
-            intake = stages.run_stage("05_adhoc_intake", run_dir, client)
+            if _stage_done(run_dir, "05_adhoc_intake"):  # resume: keep the paid-for intake
+                intake = AdhocIntake.model_validate_json(
+                    (run_dir / "05_adhoc_intake.json").read_text(encoding="utf-8"))
+            else:
+                intake = stages.run_stage("05_adhoc_intake", run_dir, client)
         except Exception as exc:  # same record-loudly contract as the DAG loop:
             # a bad intake must fail the cycle, not crash out or prune it hollow
             (run_dir / "reasoning_error.txt").write_text(
@@ -239,9 +257,10 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
         if time.monotonic() > deadline:
             return -1
         try:
-            stages.run_stage(name, run_dir, client)
+            if not _stage_done(run_dir, name):
+                stages.run_stage(name, run_dir, client)
             if name == "30_trade_plan" and settings is not None:
-                _size_trade_plan(run_dir, settings)  # deterministic qty, not the LLM's guess
+                _size_trade_plan(run_dir, settings)  # deterministic qty, not the LLM's guess; idempotent on resume
         except Exception as exc:  # a stage that can't produce valid output must not
             # crash mid-cycle and leave a partial run that looks like a clean "hold".
             # Record it loudly and fail the cycle; run_cycle -> REASONING_FAILED.
@@ -292,12 +311,21 @@ def _global_lock(root: Path):
 
 
 def run_cycle(mode: str, request: str = "", root: Path = ROOT,
-              backend: str | None = None) -> int:
+              backend: str | None = None, run_dir: Path | None = None) -> int:
     """Propose phase of the split cycle: gates -> reason -> validated orders.json,
     then STOP. Nothing routes until route_cycle(run_dir) is invoked - that
-    invocation is the approval (a human/overseer reviewed the orders first)."""
+    invocation is the approval (a human/overseer reviewed the orders first).
+
+    run_dir resumes an interrupted run in place: prepare is skipped and stages
+    with validated artifacts are not re-billed (see _stage_done)."""
     settings = load_settings(root / "config" / "settings.yaml")
     backend = backend or os.getenv("TRADELOOP_BACKEND", "openrouter")
+
+    if run_dir is not None and not Path(run_dir).name.endswith(f"_{mode}"):
+        # the run dir's trailing token drives route-time policy; a mismatch would
+        # let a postclose artifact set route under premarket order rules
+        print(f"tradeloop_cycle=RUN_DIR_MODE_MISMATCH run_dir={run_dir} mode={mode}")
+        return 2
 
     reason = _gate_holiday(_today())
     if reason:
@@ -315,7 +343,10 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         if not acquired:
             print("tradeloop_cycle=LOCKED")
             return 0
-        run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
+        if run_dir is not None:  # resume in place: never re-prepare (and re-bill) a paid-for run
+            run_dir = Path(run_dir)
+        else:
+            run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
         rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds,
                             settings=settings, root=root)
         if rc == -1:
@@ -562,7 +593,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="tradeloop.orchestrator")
     parser.add_argument("mode", choices=["premarket", "intraday", "postclose", "adhoc", "route"])
     parser.add_argument("run_dir", nargs="?", default=None,
-                        help="run directory to approve+route (route mode only)")
+                        help="route mode: run directory to approve+route. Other modes: "
+                             "resume this interrupted run in place (completed stages are "
+                             "not re-billed)")
     parser.add_argument("--request", default="")
     parser.add_argument("--backend", choices=["openrouter", "claude"], default=None,
                         help="reasoning backend; falls back to TRADELOOP_BACKEND env, then openrouter")
@@ -574,7 +607,8 @@ def main(argv=None) -> int:
         if not args.run_dir:
             parser.error("route requires a run_dir (the proposed cycle to approve)")
         return route_cycle(Path(args.run_dir), root=root)
-    return run_cycle(args.mode, args.request, root=root, backend=args.backend)
+    return run_cycle(args.mode, args.request, root=root, backend=args.backend,
+                     run_dir=Path(args.run_dir) if args.run_dir else None)
 
 
 if __name__ == "__main__":
