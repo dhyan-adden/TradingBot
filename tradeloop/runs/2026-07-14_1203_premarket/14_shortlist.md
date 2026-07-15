@@ -1,0 +1,89 @@
+# 14_shortlist
+
+```json
+{
+  "evidence": [
+    "f2d5744559e9",
+    "d1b9485d5e12",
+    "2a2981db65cb"
+  ],
+  "candidates": [
+    {
+      "evidence": [
+        "f2d5744559e9",
+        "d1b9485d5e12",
+        "2a2981db65cb"
+      ],
+      "ticker": "HDFCBANK",
+      "catalyst_type": "analyst upgrade + Q1 earnings event window",
+      "source_track": "tier_a",
+      "composite_score": 8.5,
+      "thesis": "Tier-A Goldman bullish pick plus tier-B ICICI Sec Buy(1850) confirmed by a clean ema20_pullback continuation setup; Q1 FY27 earnings this week is the event-risk window but thesis is intact on an existing holding.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "CONCOR",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 7.5,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; tightest stop-to-entry risk of the quiet breakout cohort, no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "BIOCON",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 7.3,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; no news catalyst, pure technical continuation.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "ROUTE",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 7.2,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "NUVOCO",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 7.0,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "WELCORP",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 6.9,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; highest-priced name in the quiet cohort, no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 6.8,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; wider stop-to-entry risk than peers, no news catalyst.",
+      "horizon": "5-20 days"
+    },
+    {
+      "evidence": [],
+      "ticker": "KALYANKJIL",
+      "catalyst_type": "technical breakout",
+      "source_track": "quiet",
+      "composite_score": 6.5,
+      "thesis": "Clean 20d breakout on above-threshold volume with 2R/3R targets off a real stop distance; widest stop-to-entry risk of the quiet cohort, no news catalyst.",
+      "horizon": "5-20 days"
+    }
+  ]
+}
+```

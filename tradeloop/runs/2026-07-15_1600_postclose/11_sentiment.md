@@ -1,0 +1,34 @@
+# 11_sentiment
+
+```json
+{
+  "evidence": [
+    "aa3cfd6e0afa",
+    "d82e437e4127",
+    "93e18ea84ed9",
+    "4634558cef54"
+  ],
+  "scores": [
+    {
+      "ticker": "HDFCBANK",
+      "sentiment_score": 0.75,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "TCS",
+      "sentiment_score": 0.65,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "INFY",
+      "sentiment_score": 0.35,
+      "echo_chamber_flag": false
+    },
+    {
+      "ticker": "SBIN",
+      "sentiment_score": 0.2,
+      "echo_chamber_flag": true
+    }
+  ]
+}
+```

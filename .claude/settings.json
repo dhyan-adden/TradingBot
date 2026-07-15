@@ -7,6 +7,24 @@
       "Read(//Users/dhyanpatel/miniforge3/**)",
       "Bash(df -h /Volumes/D-DRIVE && ls /Volumes/D-DRIVE/)",
       "Read(//Volumes/D-DRIVE/**)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(//Volumes/D-DRIVE/TradingBot/.env)",
+      "Read(//Volumes/D-DRIVE/TradingBot/.env.*)",
+      "Bash(cat .env*)",
+      "Bash(cat ./.env*)",
+      "Bash(cat /Volumes/D-DRIVE/TradingBot/.env*)",
+      "Bash(grep* .env*)",
+      "Bash(head .env*)",
+      "Bash(tail .env*)",
+      "Bash(less .env*)",
+      "Bash(more .env*)",
+      "Bash(nl .env*)",
+      "Bash(od* .env*)",
+      "Bash(xxd .env*)",
+      "Bash(strings .env*)"
     ]
   }
 }

@@ -1,0 +1,23 @@
+{
+  "mode": "intraday",
+  "live_orders_enabled": false,
+  "generated_by": "tradeloop.reasoning.claude",
+  "orders": [
+    {
+      "ticker": "SBIN",
+      "side": "SELL",
+      "product": "CNC",
+      "quantity": 23,
+      "price": 1015.4,
+      "order_type": "LIMIT",
+      "hard_stop": null,
+      "target_1": null,
+      "target_2": null,
+      "max_entry_price": null,
+      "strategy_family": "position_management",
+      "status": null,
+      "reason": "exit:stop_breach"
+    }
+  ],
+  "held": []
+}

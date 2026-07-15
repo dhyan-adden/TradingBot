@@ -1,0 +1,77 @@
+{
+  "evidence": [],
+  "setups": [
+    {
+      "evidence": [
+        "d1b9485d5e12",
+        "2a2981db65cb"
+      ],
+      "ticker": "HDFCBANK",
+      "classification": "exit_watch",
+      "news_confirmed": false,
+      "notes": "No 20d_breakout/ema20_pullback setup registered today despite ICICI Securities Buy (target 1850) - chart does not confirm the catalyst. Current holding with Q1 FY27 results due this week on a risk-off, rate-sensitive tape; flag exit_watch given the thin stop cushion."
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "f14e444e0afd"
+      ],
+      "ticker": "SBIN",
+      "classification": "exit_watch",
+      "news_confirmed": false,
+      "notes": "No chart setup registered today. Today's SBIN flow is Tier-C only (Jefferies/Motilal Oswal notes) - not thesis-grade, reject as a catalyst. Oil-driven bond-yield spike and rupee weakness remain the operative PSU-bank headwind for this current holding."
+    },
+    {
+      "evidence": [
+        "5266800f8bd5",
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "classification": "bullish_entry",
+      "news_confirmed": true,
+      "notes": "Tier-A stocks-in-news plus KR Choksey Accumulate (target 1531) confirmed by a live ema20_pullback setup (score 4.0, entry 1076.00, stop 1026.93, targets 1174.14/1223.21). IT relative strength despite IBM's Q2 miss; Q1 results due this week are event risk to size around."
+    },
+    {
+      "evidence": [],
+      "ticker": "HYUNDAI",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "Clean 20d_breakout, score 8.0, volume_above_threshold. Entry 2037.00, stop 1954.84, targets 2201.31/2283.47. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "LTTS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout, score 8.0, volume_above_threshold. Entry 3521.30, stop 3335.69, targets 3892.53/4078.14. No news catalyst; independent of the INFY-led IT strength theme."
+    },
+    {
+      "evidence": [],
+      "ticker": "JUSTDIAL",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout, score 8.0, volume_above_threshold. Entry 824.10, stop 771.57, targets 929.15/981.68. No news catalyst."
+    },
+    {
+      "evidence": [],
+      "ticker": "NUVOCO",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout, score 8.0, volume_above_threshold. Entry 386.90, stop 364.53, targets 431.64/454.01. No news catalyst; cement sector diversification away from the bank-heavy book."
+    },
+    {
+      "evidence": [],
+      "ticker": "RALLIS",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout, score 8.0, volume_above_threshold. Entry 242.68, stop 232.85, targets 262.34/272.17. No news catalyst; tight ~4% stop distance."
+    },
+    {
+      "evidence": [],
+      "ticker": "SUNPHARMA",
+      "classification": "bullish_entry",
+      "news_confirmed": false,
+      "notes": "20d_breakout, score 6.0, volume_normal. Entry 1957.60, stop 1907.00, targets 2058.81/2109.41. No news catalyst; Nifty50 pharma, defensive fit for the current oil-spike/risk-off tape."
+    }
+  ]
+}

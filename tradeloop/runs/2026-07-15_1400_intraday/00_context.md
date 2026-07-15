@@ -1,3 +1,24 @@
+# Context
+
+Mode: intraday
+Cash INR: 10557.659999999998
+Equity INR: 99986.58
+Daily P&L INR: 0.0
+
+## Positions
+- CDSL: quantity=11, avg_price=1432.22, hard_stop=1390.73
+- DLF: quantity=36, avg_price=688.34, hard_stop=655.58
+- HDFCBANK: quantity=30, avg_price=830.62, hard_stop=807.24
+- SBIN: quantity=23, avg_price=1042.42, hard_stop=1015.4
+
+## Macro Snapshot
+# Macro View
+
+Rolling India macro snapshot. Updated by the News Analyst during premarket and
+by the Post-Trade Analyst during postclose when relevant.
+
+## Carry Forward Context
+
 # Carry Forward Context
 
 Use this editable file for durable context that should be forwarded into every
@@ -57,12 +78,12 @@ TradeLoop run.
   swing technicals.
 
 <!-- auto:holdings_review:start -->
-### Holdings review (2026-07-15_1600_postclose)
+### Holdings review (2026-07-14_1703_intraday)
 
-- CDSL: HOLD (thesis_intact, conviction 6.0) - No fresh news or setup today. LTP 1440.10 is above avg_price 1432.22 and ~3.6% clear of the 1390.73 stop; green fundamentals, breakout thesis unchanged.
-- DLF: HOLD (thesis_intact, conviction 4.0) - No fresh catalyst. LTP 657.75 remains below avg_price 688.34 and the stop cushion has compressed further to ~0.3% (655.58 stop), the thinnest in the book. Standing yellow fundamental flag (DCCDL related-party structure) unchanged; watch this stop very closely next cycle.
-- HDFCBANK: HOLD (thesis_strengthened, conviction 6.5) - Nifty Bank rallied ~560pts with HDFCBANK up to 2%; ICICI Securities reiterated Buy (target 1850) and the ema20_pullback setup confirms bullish_continuation. LTP 815.45 is ~1.0% above the 807.24 stop, improved from last cycle. Q1 FY27 results due this week are real event risk into a still risk-off oil/rupee tape - do not add pre-earnings.
-- SBIN: HOLD (thesis_intact, conviction 3.5) - LTP 1030.10 has moved further clear of the 1015.40 stop (~1.45% cushion) after last cycle's stop-breach warning. Rode the Nifty Bank rally and carries a Motilal Oswal Buy (target 1300), but that coverage is only Tier-C and sentiment is echo-chamber-flagged (score 0.2) - treat as unconfirmed. PSU-bank remains a laggard vs private banks on oil-driven bond-yield/rupee pressure; 1015.40 stays a hard tripwire.
+- CDSL: HOLD (thesis_intact, conviction 6.0) - No fresh news or technical setup today. LTP 1428.50 pulled back slightly below the 1432.22 average entry but remains comfortably above the 1390.73 stop (~2.7% cushion). Breakout thesis stays intact; watch for a reclaim above 1444 to resume the uptrend toward 1517.13/1553.24.
+- DLF: HOLD (thesis_intact, conviction 6.0) - No fresh catalyst or technical setup today. LTP 671.45 sits below the 688.34 average price but well clear of the 655.58 stop. Long-standing DCCDL related-party yellow flag is unchanged, no new developments.
+- HDFCBANK: HOLD (thesis_intact, conviction 5.5) - Moody's affirmed asset quality and ICICI Securities reiterated a Buy at target 1850, and the ema20_pullback setup still reads bullish_continuation, but LTP 809.40 sits only ~0.27% above the 807.24 stop - the thinnest cushion in the book. Q1 FY27 results due this week are real event risk into a risk-off, rate-sensitive tape. Thesis stays intact but conviction lowered on the thin margin.
+- SBIN: EXIT (stop_breach, conviction 2.5) - LTP 1015.40 is exactly at the 1015.40 hard stop, mandatory exit. PSU-bank sector faces a headwind from the oil-driven bond-yield spike and rupee weakness past 96/USD; only tier-C chatter (Jefferies loan CAGR/ROE note) with no offsetting tier-A/B catalyst today. The 1019 intraday tripwire flagged last cycle has now given way to the hard stop itself.
 
-All four holdings HOLD; CDSL (LTP 1440.10) and DLF (LTP 657.75) had no fresh catalysts, though DLF's stop cushion has compressed to roughly 0.3% above its 655.58 stop and is now the most exposed position in the book. HDFCBANK (LTP 815.45) extended its Nifty Bank-led rally with an ICICI Securities Buy reiteration (target 1850) and an improved ~1.0% cushion above 807.24, but Q1 FY27 results due this week are real event risk - avoid adding pre-earnings. SBIN (LTP 1030.10) moved further above its 1015.40 stop to ~1.45% cushion, but the Motilal Oswal Buy catalyst is only Tier-C and echo-chamber-flagged, so keep 1015.40 as a hard tripwire rather than trusting the bounce. Oil above $85/bbl on Iran-US escalation and rupee weakness remain the dominant macro headwind for rate-sensitive financials across the book.
+SBIN hit its 1015.40 hard stop exactly (LTP 1015.40) and is EXITED this cycle on stop_breach; PSU-bank sector pressure from the oil-driven bond-yield spike and rupee weakness confirmed the exit-watch flagged last cycle. HDFCBANK holds at LTP 809.40, just ~0.27% above its 807.24 stop; Q1 FY27 results due this week are the key event risk, and Moody's affirmed asset quality plus an ICICI Securities Buy (target 1850) keep the thesis intact for now. CDSL (LTP 1428.50) and DLF (LTP 671.45) are unchanged holds with no fresh catalysts, both comfortably above their 1390.73 and 655.58 stops respectively. Oil price spike, rupee past 96/USD, and the global bond-yield spike remain the dominant macro headwinds across the book, especially for rate-sensitive financials. Watch HDFCBANK's stop closely intraday given the thin cushion, and consider redeploying capital freed by the SBIN exit next premarket.
 <!-- auto:holdings_review:end -->

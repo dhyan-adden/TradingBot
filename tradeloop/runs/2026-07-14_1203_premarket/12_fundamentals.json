@@ -1,0 +1,54 @@
+{
+  "evidence": [],
+  "tags": [
+    {
+      "evidence": [
+        "f2d5744559e9",
+        "d1b9485d5e12",
+        "2a2981db65cb"
+      ],
+      "ticker": "HDFCBANK",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "4706813989b5",
+        "8d9924d85f54"
+      ],
+      "ticker": "SBIN",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "7fb95ecaa93d"
+      ],
+      "ticker": "ICICIBANK",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [
+        "8a55bda0b6c4"
+      ],
+      "ticker": "INFY",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [],
+      "ticker": "CDSL",
+      "tag": "green",
+      "red_flags": []
+    },
+    {
+      "evidence": [],
+      "ticker": "DLF",
+      "tag": "yellow",
+      "red_flags": [
+        "Long-standing related-party transaction exposure via the DCCDL joint-venture structure"
+      ]
+    }
+  ]
+}
