@@ -1,0 +1,9 @@
+SHELL=/bin/bash
+PATH=/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+# Qatar-time TradeLoop schedule.
+# Cron uses the machine's local timezone; install only on a machine set to Qatar time (+03).
+30 6 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && TRADELOOP_AUTO_ROUTE_PAPER=true ./tradeloop/scripts/auto_run_qatar.sh premarket >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/qatar_autorun.cron.log 2>&1
+0 10 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && TRADELOOP_AUTO_ROUTE_PAPER=true ./tradeloop/scripts/auto_run_qatar.sh intraday >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/qatar_autorun.cron.log 2>&1
+0 13 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && TRADELOOP_AUTO_ROUTE_PAPER=true ./tradeloop/scripts/auto_run_qatar.sh intraday >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/qatar_autorun.cron.log 2>&1
+30 13 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/auto_run_qatar.sh postclose >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/qatar_autorun.cron.log 2>&1

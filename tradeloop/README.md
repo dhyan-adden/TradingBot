@@ -1,23 +1,36 @@
 # TradeLoop
 
 TradeLoop is an agent-driven, India-only, news-discovery-first trading loop.
-There is no LangGraph runtime or direct LLM API integration in Python. Cron
-invokes `scripts/run_cycle.sh <mode>`, which launches a coding-agent CLI against
-the master markdown orchestrator.
+Python owns deterministic orchestration, data fetch, validation, routing gates,
+paper execution, audit, and dashboard state.
+The default manual path uses the in-process Claude backend through
+`python -m tradeloop.orchestrator` or `scripts/run_detached.sh`.
 
 ## Reasoning agent
 
-Pick the agent with `TRADELOOP_AGENT`:
+The current supported manual backend is Claude:
+
+```bash
+./tradeloop/scripts/run_detached.sh premarket --backend claude
+```
+
+The OpenCode backend can mix your OpenAI subscription with OpenRouter API models:
+
+```bash
+./tradeloop/scripts/run_detached.sh premarket --backend opencode
+```
+
+In that mode, `41_pm_decision` uses `openai/gpt-5.5`, debate/trader/risk use
+`openai/gpt-5.6-luna`, and OpenAI-limit failures fall back to
+`openrouter/deepseek/deepseek-v4-flash-0731`.
+
+The legacy `scripts/run_cycle.sh` entrypoint is the Codex/OpenRouter path only:
 
 - `codex` (default): Codex CLI talks to OpenRouter directly (no daemon), using
   only the four models DeepSeek V4 Flash, MiMo-V2.5, MiniMax M3, Hy3 preview.
-- `claude`: native Claude Code (your Claude auth/models, no OpenRouter). The
-  master orchestrator dispatches each TradeLoop team as a Claude Code subagent.
-  Optional model override via `TRADELOOP_CLAUDE_MODEL`.
 
 ```bash
 TRADELOOP_AGENT=codex  ./tradeloop/scripts/run_cycle.sh premarket
-TRADELOOP_AGENT=claude ./tradeloop/scripts/run_cycle.sh premarket
 ```
 
 ## Non-Negotiables
@@ -32,12 +45,21 @@ TRADELOOP_AGENT=claude ./tradeloop/scripts/run_cycle.sh premarket
 - Live routing additionally requires the strategy-performance promotion gate.
 - Codex and scripts must never read `.env` or print secret-like values.
 
+## Readiness Boundary
+
+The implemented target is a live-data, propose-only paper loop.
+The scanner currently implements `breakout_20d_pullback` and `ema_trend_pullback`; the other configured families are marked planned.
+Live trading remains blocked until the ledger, promotion metrics, clean audits, approval policy, and fresh broker reconciliation all pass.
+The validation lab, point-in-time historical data, regime governor, and counterfactual overlay scoreboard described in `docs/vision.md` are not implemented yet.
+
 ## Runtime Model
 
 Python does deterministic work: data fetch, ticker extraction, indicators,
 sizing, cost model, portfolio state, broker payloads, and markdown memory
-updates. Codex does reasoning through file boundaries. Each agent reads named
-inputs and writes one named output in `runs/<timestamp>_<mode>/`.
+updates.
+The selected backend does reasoning through file boundaries.
+Each stage reads named inputs and writes one named output in
+`runs/<timestamp>_<mode>/`.
 
 ## Cycles
 

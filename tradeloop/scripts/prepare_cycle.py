@@ -14,6 +14,7 @@ from tradeloop.lib.audit.ledger import ORDER_FILLED, STOP_UPDATED, Ledger
 from tradeloop.lib.broker.paper_book import hydrate
 from tradeloop.lib.data.ingest import run as ingest_run
 from tradeloop.lib.data.kite import KiteClient
+from tradeloop.lib.data.regime import classify_market_regime, dump_market_regime, render_market_regime
 from tradeloop.lib.data.snapshot import render_news_raw, render_setups
 from tradeloop.lib.portfolio.state import PortfolioState, empty_state_from_settings, render_context
 from tradeloop.lib.util.ist_clock import IST
@@ -78,15 +79,22 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
     # deterministic stop-breach check and the holdings reviewer.
     holdings_scoped = mode in ("intraday", "postclose")
     held = sorted(state.positions) if holdings_scoped else []
-    scope = {"symbols": held} if holdings_scoped else {}
+    symbols = held if holdings_scoped else None
+    snapshot = None
     try:
-        ingest_run(now, run_dir=run_dir, config_dir=base / "config", kite_client=kite_client,
-                   source_health_root=base, **scope)
+        snapshot = ingest_run(now, symbols=symbols, run_dir=run_dir, config_dir=base / "config",
+                              kite_client=kite_client, source_health_root=base)
     except Exception as exc:  # degrade-not-abort: never leave a silent blank
         (run_dir / "01_news_raw.md").write_text(
             render_news_raw([], [], news_available=False), encoding="utf-8")
         (run_dir / "02_setups_raw.md").write_text(render_setups([]), encoding="utf-8")
         (run_dir / "ingest_error.txt").write_text(f"ingest failed: {exc}\n", encoding="utf-8")
+    regime = classify_market_regime(
+        getattr(snapshot, "setups", []) if snapshot is not None else [],
+        getattr(snapshot, "macro", []) if snapshot is not None else [],
+    )
+    (run_dir / "03_market_regime.json").write_text(dump_market_regime(regime), encoding="utf-8")
+    (run_dir / "03_market_regime.md").write_text(render_market_regime(regime), encoding="utf-8")
     if holdings_scoped and kite_client is not None and held:
         try:
             ltps = kite_client.ltp(held)

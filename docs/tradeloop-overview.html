@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradeLoop - How the Pipeline Works</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --panel-2: #1d2638; --ink: #e6ebf4;
+    --muted: #8b96ad; --line: #2a3550; --accent: #4f8ef7; --green: #2fb56d;
+    --amber: #e0a23c; --red: #e05b5b; --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); padding: 24px 20px 80px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { text-align: center; padding: 18px 0 8px; }
+  h1 { font-size: 30px; letter-spacing: .3px; }
+  h1 .tl { color: var(--accent); }
+  .sub { color: var(--muted); max-width: 780px; margin: 10px auto 0; font-size: 15px; }
+  .pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--muted); }
+  .pill b { color: var(--ink); font-weight: 600; }
+  h2 { font-size: 20px; margin: 34px 0 12px; color: var(--accent); }
+  h2 span { color: var(--muted); font-size: 13px; font-weight: 400; margin-left: 8px; }
+  code { background: #24304a; border-radius: 5px; padding: 1px 6px; font-size: 12.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #b9c9f0; }
+
+  .build { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 8px; }
+  .stage { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; cursor: pointer; background: var(--panel); transition: transform .12s, border-color .12s, box-shadow .12s; }
+  .stage:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .stage .num { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .stage .name { font-weight: 650; font-size: 13.5px; margin-top: 3px; }
+  .stage .by { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .stage .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .gate { border-color: var(--amber); }
+  .gate .dot { background: var(--amber); }
+  .gate .name { color: var(--amber); }
+  .data .dot { background: var(--accent); }
+  .llm .dot { background: var(--violet); }
+  .live .dot { background: var(--green); }
+  .audit .dot { background: var(--red); }
+
+  .dag { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
+  .hop { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel); }
+  .hop .k { font-size: 11px; color: var(--violet); font-family: ui-monospace, Menlo, monospace; }
+  .hop .t { font-size: 13.5px; font-weight: 600; margin: 3px 0 4px; }
+  .hop .d { font-size: 12px; color: var(--muted); }
+  .hop .reads { font-size: 11px; color: var(--muted); margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); opacity: .8; }
+
+  .mask { position: fixed; inset: 0; background: rgba(7,10,18,.74); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .mask.open { display: flex; }
+  .modal { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; max-width: 640px; width: 100%; padding: 22px 24px; max-height: 86vh; overflow: auto; }
+  .modal h3 { font-size: 19px; }
+  .modal .tag { font-size: 12px; color: var(--muted); margin: 2px 0 12px; font-family: ui-monospace, Menlo, monospace; }
+  .modal p { color: var(--ink); margin-bottom: 10px; font-size: 14px; }
+  .modal .src { font-size: 12px; color: var(--muted); background: #20273f; border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; }
+  .xbtn { float: right; background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0 4px; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .box h3 { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .box ul { margin: 8px 0 0 18px; color: var(--muted); }
+  .box li { margin: 5px 0; }
+  .box li b { color: var(--ink); }
+
+  .flags { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 10px; }
+  .flag { border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+  .flag h4 { font-size: 13.5px; margin-bottom: 4px; }
+  .flag p { font-size: 12.5px; color: var(--muted); }
+  .flag.red { border-bottom-color: var(--red); } .flag.red h4 { color: var(--red); }
+  .flag.green { border-bottom-color: var(--green); } .flag.green h4 { color: var(--green); }
+  .flag.amber { border-bottom-color: var(--amber); } .flag.amber h4 { color: var(--amber); }
+
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details li { font-size: 13.5px; color: var(--muted); margin-top: 6px; font-family: ui-monospace, Menlo, monospace; }
+  .foot { margin-top: 36px; color: var(--muted); font-size: 12px; text-align: center; border-top: 1px solid var(--line); padding-top: 18px; }
+  @media (max-width: 860px) {
+    .build { grid-template-columns: repeat(2, 1fr); }
+    .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="tl">TradeLoop</span> — How the Pipeline Works</h1>
+    <p class="sub">An agent-driven, India-only, news-discovery-first <b>paper trading loop</b> for cash equities.
+    Python does all deterministic work (fetch, tickers, indicators, sizing, cost model, risk gate, ledger).
+    An LLM reasoning DAG does the judgment — through file boundaries. Every order passes two deterministic gates
+    before it can fill. Cycles are <b>propose-only</b>: they stop at <code>AWAITING_APPROVAL</code> until a human routes them.</p>
+    <div class="pills">
+      <span class="pill"><b>India</b> NSE cash equities</span>
+      <span class="pill"><b>Long-only</b> no shorts / F&amp;O / leverage</span>
+      <span class="pill"><b>Paper first</b> ZERODHA_ENABLE_TRADING=false</span>
+      <span class="pill"><b>Human approves</b> every routing</span>
+      <span class="pill"><b>Hash-chained</b> audit ledger</span>
+    </div>
+  </header>
+
+  <h2>Pipeline: one cycle, end to end <span>click any box for the source-file truth</span></h2>
+  <div class="build" id="pipeline"></div>
+
+  <h2>The reasoning DAG — the analyst team <span>each reads named artifacts, writes one structured form</span></h2>
+  <div class="dag" id="dag"></div>
+
+  <h2>Cycle modes <span>same desk, different scope</span></h2>
+  <div class="cols" id="modes"></div>
+
+  <h2>Safety layers <span>deterministic and impossible to bypass</span></h2>
+  <div class="flags" id="flags"></div>
+
+  <h2>Where the pieces live</h2>
+  <details open>
+    <summary>Layout map (entry points + roles)</summary>
+    <ul id="layout"></ul>
+  </details>
+
+  <div class="foot">TradeLoop &middot; sources of truth: <code>tradeloop/orchestrator.py</code> &middot; <code>docs/tradeloop-architecture.md</code> &middot; <code>README.md</code></div>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <button class="xbtn" id="closebtn">&times;</button>
+    <div id="modalbody"></div>
+  </div>
+</div>
+
+<script>
+const esc = s => String(s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------------- pipeline stages ---------------- */
+const PIPE = [
+  { cls:"gate", dot:"gate",
+    name:"Gates",
+    by:"holiday / kill-switch / lock calls",
+    d:"Three quick yes/no checks before any work: is it an NSE holiday? Is kill_switch.md present? Take the global lock so two cycles never overlap.",
+    why:"Deterministic, calculated in code and now actually enforced - any 'no' stops the cycle cold.",
+    src:"tradeloop/orchestrator.py:_gate_holiday, _gate_kill_switch, _lock_context" },
+  { cls:"data", n:"data",
+    name:"Prepare + ingest",
+    by:"data fetch, snapshot",
+    d:"Not a holiday? Then build the day's inputs: fetch news (Google News, Moneycontrol/ET/Mint/BS RSS, NSE/BSE announcements, Reddit), tag stories to the right tickers, pull last price + candles from Kite, and freeze a hashed per-cycle snapshot.",
+    headline:"The frozen snapshot is the sealed evidence box - re-running a cycle reads the same inputs (input reproducibility).",
+    src:"tradeloop/lib/data/ingest.py, snapshot.py, tickers.py, kite.py, sources/*.py" },
+  { cls:"llm", n:"llm",
+    name:"Reason (DAG)",
+    by:"13 analyst roles",
+    d:"The team argues: news -> sentiment -> fundamentals -> technicals -> shortlist -> bull vs bear debate -> trader writes a ticket. Each analyst reads prior .md artifacts with file boundaries and writes one non-empty, JSON-validated .json + .md artifact.",
+    src:"tradeloop/lib/llm/stages.py:DAG, prompts 10_-41_.md",
+    why:"structured forms instead of essays - malformed output stops the cycle loudly." },
+  { cls:"llm", n:"llm",
+    name:"Risk + PM",
+    by:"risk manager, portfolio manager",
+    d:"The risk manager writes a report on the trade plan; the PM decides yes/no. Sizing is deterministic: Python (not the LLM) computes the share count from the risk budget to the hint in the plan.",
+    src:"tradeloop/prompts/40_risk_manager.md, 41_portfolio_manager.md, lib/risk/sizing.py" },
+  { cls:"audit", n:"gate",
+    name:"Propose",
+    by:"orders.json, hold at AWAITING_APPROVAL",
+    d:"The PM's signed-off orders become a typed OrdersFile. The run stops here. Nothing routes on its own: routing happens only when a human runs: python -m tradeloop.orchestrator route tradeloop/runs/&lt;ts&gt;_&lt;mode&gt;.",
+    src:"tradeloop/lib/broker/orders_schema.py, lib/broker/router.py" },
+  { cls:"live", n:"gate",
+    name:"Risk gate evaluate()",
+    by:"lib/risk/checks.py",
+    d:"Every order, before it can fill, is passed to the deterministic risk gate. It checks: in universe, long-only, position size vs caps, not over position count, sector cap killed, not selling more than we hold, recommended vs real. Cycle mode is also enforced per-order here (intraday can only SELL exits, postclose never trades).",
+src:"tradeloop/lib/risk/checks.py, lib/broker/router.py:route_orders_file" },
+  { cls:"audit", n:"audit",
+    name:"Route + ledger + learn",
+    by:"paper broker, postclose learning",
+    d:"Fills go to the paper broker that models real India costs and slippage; paper_book persists between cycles. Every fetch, verdict and fill is appended to the hash-chained SQLite ledger. Postclose runs reconcile / controls / attribution / postclose learning.",
+    src:"tradeloop/lib/broker/paper_broker.py, paper_book.py, lib/audit/ledger.py, reconcile.py, postclose.py" },
+];
+
+/* ---------------- reasoning DAG ---------------- */
+const HOP = [
+  { k:"10_news", t:"News analyst", d:"Dedup + prioritize stories; tag evidence ids.", reads:"01_news_raw.md, 00_context.md" },
+  { k:"11_sentiment", t:"Sentiment analyst", d:"Read tone.", reads:"10_news.md" },
+  { k:"12_fundamentals", t:"Fundamentals analyst", d:"Valuation & balance-sheet read.", reads:"10_news.md, 00_context.md" },
+  { k:"13_technical", t:"Technical analyst", d:"Charts, setups, levels.", reads:"10_news.md, 02_setups_raw.md, 00_context.md" },
+  { k:"14_shortlist", t:"Shortlister", d:"Pick names to argue about.", reads:"10+11+12+13 md" },
+  { k:"15_holdings_review", t:"Holdings reviewer", d:"Re-underwrites the existing book.", reads:"00_context.md, holdings_ltp.json, 10-13 md" },
+  { k:"20/21/22", t:"Bull · Bear · Debate", d:"Bull researcher vs bear researcher, moderated.", reads:"14_shortlist.md / 20+21 md" },
+  { k:"30_trade_plan", t:"Trader", d:"Writes the ticket (entry, stop).", reads:"22_debate.md, 13_technical.md, 02_setups_raw.md" },
+  { k:"40", t:"Risk manager", d:"Checks the plan vs the rulebook.", reads:"30_trade_plan.md" },
+  { k:"41", t:"Portfolio manager", d:"Signs off / rejects orders.", reads:"40_risk_report.md" },
+  { k:"50", t:"Post-trade analyst", d:"Learns from fills.", reads:"fills.json" },
+];
+
+/* ---------------- cycle modes ---------------- */
+const MODES = [
+  { name:"premarket", time:"08:00 IST", dot:"green",
+    d:"Full pipeline. New long entries allowed. This is the only mode that proposes fresh BUYs.", src:"manual: python -m tradeloop.orchestrator premarket" },
+  { name:"intraday", time:"14:00 IST", dot:"amber",
+    d:"Holdings pulse only. May propose exits and stop-tightens, never new entries. Still stops at AWAITING_APPROVAL.", src:"_MODE_DAGS['intraday'] = [10_news, 13_technical, 15_holdings_review]" },
+  { name:"postclose", time:"16:00 IST", dot:"amber",
+    d:"Holdings re-underwrite; sentiment+fundamentals too. Analysis only - no trading. Verdicts carry forward and learning/memory updates run.", src:"_MODE_DAGS['postclose'] = [10_news, 11_sentiment, 12_fundamentals, 13_technical, 15_holdings_review]" },
+  { name:"adhoc", time:"on demand", dot:"accent",
+    d:"Read a free-text request, then run the necessary path.", src:"07: python -m tradeloop.orchestrator adhoc \"request\"" },
+];
+
+/* ---------------- safety layers ---------------- */
+const FLAGS = [
+  { cls:"red", name:"kill_switch.md", d:"Place the file in tradeloop/ and every order halts at route time. Always honored, never optional." },
+  { cls:"amber", name:"Cycle-mode gate", d:"postclose never trades; intraday exits-only; only premarket/adhoc may open new longs. Enforced per-order in code at route time." },
+  { cls:"amber", name:"Risk gate evaluate()", d:"Deterministic Python that any order passes before filling. Can't be skipped or overridden by the reasoning layer." },
+  { cls:"green", name:"Live promotion gate", d:"Live requires >= 60 closed paper trades, clean audits, and full promotion metrics from the ledger (not a markdown flag)." },
+  { cls:"amber", name:"Human approval", d:"human_in_loop (default) stops at AWAITING_APPROVAL until a person approves; auto mode never live-routes unless allow_auto_live=true." },
+  { cls:"red", name:"Broker reconciliation", d:"Live routing requires a fresh read-only Zerodha snapshot (holdings/orders/cash) that matches TradeLoop's expected live book before any payload." },
+  { cls:"red", name:"One-share canary", d:"The first live rollout is mechanically capped at 1 share per BUY; live execution still requires separate MCP confirm=true." },
+  { cls:"red", name:"Hash-chained ledger", d:"Append-only SQLite - any tamper breaks the chain and trips LedgerTamperError." },
+];
+
+/* ---------------- layout map ---------------- */
+const LAYOUT = [
+  "tradeloop/orchestrator.py - desk manager: gates -> lock -> prepare -> reason -> propose -> route",
+  "tradeloop/prompts/ - 00_master + 13 role prompts (news -> ... -> PM, post-trade)",
+  "tradeloop/lib/llm/ - OpenRouter/Claude reasoning DAG (client, routing, schemas, stages)",
+  "tradeloop/lib/data/ - ingest + sources + snapshot + evidence/grounding gates + Kite client",
+  "tradeloop/lib/ta/ - scanner + indicators over the full-NSE universe",
+  "tradeloop/lib/broker/ - router (risk + mode gates), paper broker, orders schema",
+  "tradeloop/lib/risk/ - evaluate() gate, sizing, circuit_breaker (kill switch)",
+  "tradeloop/lib/audit/ - hash-chained ledger, reconcile, controls, attribution, postclose learning",
+  "tradeloop/lib/portfolio/ lib/memory/ lib/util/ - portfolio state, markdown memory, holidays/IST clock",
+  "tradeloop/dashboard/ - stdlib read-only web UI (127.0.0.1:8765) - portfolio + run cards",
+  "tradeloop/scripts/ - prepare_cycle, verify_setup, cron_dispatch, run_cycle.sh",
+  "tradeloop/config/ - settings, universe, indicators, news_sources, strategy_families",
+  "tradeloop/state/ - ledger.db (hash-chained) + orchestrator.lock",
+  "tradeloop/memory/ - journal, lessons, dossiers, strategy_performance",
+  "tradeloop/runs/ - archived cycle directories (the audit trail)",
+  "src/mcp/zerodha.ts - Zerodha Kite MCP, the one broker integration",
+  "scripts/, bin/codex-zerodha - daily token + env checks + project-local MCP launcher",
+];
+
+/* ---------------- render ---------------- */
+const modal = document.getElementById('modalbody');
+function openModal(title, tag, d, src, why, headline){
+  modal.innerHTML =
+    '<h3>' + esc(title) + '</h3>'
+    + (tag ? '<div class="tag">' + esc(tag) + '</div>' : '')
+    + (headline ? '<p><b>' + esc(headline) + '</b></p>' : '')
+    + '<p>' + esc(d) + '</p>'
+    + (why ? '<p class="why">' + esc(why) + '</p>' : '')
+    + (src ? '<div class="src">' + esc(src) + '</div>' : '');
+  document.getElementById('mask').classList.add('open');
+}
+
+function pipeHTML() {
+  return PIPE.map((p,i)=>
+    '<div class="stage ' + p.cls + '" data-i="'+i+'">'
+    + '<span class="dot"></span><span class="num">'+ (p.num===undefined?String(i+1).padStart(2,'0'):p.num) +'</span>'
+    + '<div class="name">' + esc(p.name) + '</div>'
+    + '<div class="by">'+ esc(p.by) +'</div>'
+    + '</div>').join('');
+}
+
+document.getElementById('pipeline').innerHTML = pipeHTML();
+document.getElementById('pipeline').addEventListener('click', e=>{
+  const st = e.target.closest('.stage'); if(!st) return;
+  const p = PIPE[st.dataset.i];
+  openModal(p.name, (p.n||'stage'), p.d, p.src, p.why, p.headline);
+});
+
+document.getElementById('dag').innerHTML = HOP.map(h=>
+  '<div class="hop"><div class="k">'+esc(h.k)+'</div><div class="t">'+esc(h.t)+'</div>'
+  +'<div class="d">'+esc(h.d)+'</div>'
+  +(h.reads?'<div class="reads">reads: '+esc(h.reads)+'</div>':'')+'</div>').join('');
+
+document.getElementById('modes').innerHTML = MODES.map(m=>
+  '<div class="box"><h3><span class="dot" style="background:var(--'+m.dot+')"></span>'+esc(m.name)+'</h3>'
+  +'<ul><li><b>Time:</b> '+esc(m.time)+'</li>'
+  +'<li>'+esc(m.d)+'</li>'
+  +'<li><code>'+esc(m.src)+'</code></li></ul></div>').join('');
+
+document.getElementById('flags').innerHTML = FLAGS.map(f=>
+  '<div class="flag '+f.cls+'"><h4>'+esc(f.name)+'</h4><p>'+esc(f.d)+'</p></div>').join('');
+
+document.getElementById('layout').innerHTML = LAYOUT.map(l=>'<li>'+esc(l)+'</li>').join('');
+
+document.getElementById('closebtn').onclick = ()=> document.getElementById('mask').classList.remove('open');
+document.getElementById('mask').addEventListener('click', e=>{ if(e.target.id==='mask') e.target.classList.remove('open'); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.getElementById('mask').classList.remove('open'); });
+</script>
+</body>
+</html>

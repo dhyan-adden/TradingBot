@@ -22,8 +22,10 @@ Rules:
 - When the concern is protecting an open gain on an intact thesis, prefer
   TIGHTEN_STOP with reason_code profit_protect. new_stop must be ABOVE the
   current recorded stop and BELOW the current price.
-- ADD is advisory only: it cannot execute in this cycle; it informs the next
-  premarket. Never pair ADD with an exit_quantity or new_stop.
+- ADD means the current thesis has strengthened enough to top up the existing
+  holding. It can execute in intraday paper mode only if deterministic sizing and
+  risk gates approve it. Never pair ADD with an exit_quantity; include new_stop
+  only when the strengthened thesis also justifies a higher stop.
 - TRIM requires exit_quantity: the number of shares to sell, at most the held
   quantity.
 - conviction scores the CURRENT thesis 0-10, judged against the evidence in

@@ -29,19 +29,30 @@
   .side { font-size: 12px; border-radius: 6px; padding: 1px 7px; background: #eef1f5; }
   li.arg { list-style: none; margin: 3px 0 3px 10px; color: #444; }
   li.arg .side { font-size: 10px; font-weight: 650; }
+  .statusgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .statusitem { border: 1px solid #e2e2e2; border-radius: 10px; padding: 10px 12px; }
+  .statusitem .label { color: #666; font-size: 12px; }
+  .statusitem .value { font-weight: 650; }
+  .ok { color: #1a7f4b; } .warn { color: #9a6700; } .bad { color: #b3362c; }
+  .usage { margin: 12px 0; }
+  .usage-note { color: #666; font-size: 12px; margin: 4px 0 0; }
 </style>
 <h1>TradeLoop - what the bot is thinking</h1>
 <div id="bar">
   <button id="runNow">Run now</button>
+  <button id="routePaper">Route paper orders</button>
   <select id="picker"></select>
   <span id="status"></span>
 </div>
+<h2>Readiness</h2>
+<div id="readiness" class="statusgrid"></div>
 <h2>Portfolio</h2>
 <div class="tiles" id="tiles"></div>
 <div id="holdings"></div>
 <h2>Transactions</h2>
 <div id="transactions"></div>
 <h2>Latest run</h2>
+<div id="usage"></div>
 <div id="cards"></div>
 <script>
 let current = null, timer = null;
@@ -78,6 +89,14 @@ async function poll() {
   }
 }
 
+document.getElementById('routePaper').onclick = async () => {
+  if (!current || !confirm('Route the selected orders in PaperBroker? No live order will be sent.')) return;
+  const result = await fetch('/api/route-paper?dir=' + encodeURIComponent(current)).then(x => x.json());
+  document.getElementById('status').textContent = result.routed
+    ? 'paper orders routed' : (result.output || result.error || 'paper route blocked');
+  await poll();
+};
+
 function point(p) {
   if (p.startsWith('For: '))
     return '<li class="arg"><span class="side gain">FOR</span> ' + escapeHtml(p.slice(5)) + '</li>';
@@ -98,9 +117,33 @@ function card(s, extraClass) {
 }
 
 function render(run) {
+  renderUsage(run.usage || {});
   const html = (run.stages || []).map(s => card(s)).join('')
     + card(run.decision, 'decision');
   document.getElementById('cards').innerHTML = html;
+}
+
+function renderUsage(u) {
+  const cost = u.cost_known ? '$' + Number(u.cost_usd || 0).toFixed(6) : 'not reported';
+  const note = u.cost_known ? (u.cost_source === 'estimated_openrouter_pricing'
+    ? 'Estimated from reported tokens and configured OpenRouter model rates.'
+    : 'Provider-reported cost from the run audit log.')
+    : 'No provider cost was reported for this run.';
+  const rows = Object.entries(u.by_stage || {}).map(([stage, v]) =>
+    '<tr><td>' + escapeHtml(stage) + '</td><td class="num">' + v.calls
+    + '</td><td class="num">' + Number(v.total_tokens || 0).toLocaleString('en-IN')
+    + '</td><td class="num">' + (u.cost_known ? '$' + Number(v.cost_usd || 0).toFixed(6) : '-') + '</td></tr>'
+  ).join('');
+  document.getElementById('usage').innerHTML = '<div class="card usage"><div class="cardhead">'
+    + '<h3>LLM Usage</h3><span class="model">' + escapeHtml(cost) + '</span></div>'
+     + '<p class="role">' + u.calls + ' provider call' + (u.calls === 1 ? '' : 's')
+     + (u.by_stage && u.by_stage.codex_orchestrator && u.by_stage.codex_orchestrator.handoffs
+       ? ' · ' + u.by_stage.codex_orchestrator.handoffs + ' expert handoffs' : '')
+     + ' · ' + Number(u.total_tokens || 0).toLocaleString('en-IN')
+    + ' total tokens · ' + u.successful_calls + ' successful · ' + u.failed_calls + ' failed</p>'
+    + '<p class="usage-note">' + escapeHtml(note) + '</p>'
+    + (rows ? '<table><tr><th>Stage</th><th class="num">Calls</th><th class="num">Tokens</th><th class="num">Cost</th></tr>' + rows + '</table>' : '')
+    + '</div>';
 }
 
 function escapeHtml(t) {
@@ -122,6 +165,28 @@ const ist = ts => ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Ko
 function tile(label, value) {
   return '<div class="tile"><div class="label">' + escapeHtml(label) + '</div>'
     + '<div class="value">' + value + '</div></div>';
+}
+
+function statusItem(label, value, cls) {
+  return '<div class="statusitem"><div class="label">' + escapeHtml(label) + '</div>'
+    + '<div class="value ' + cls + '">' + escapeHtml(value) + '</div></div>';
+}
+
+async function loadStatus() {
+  const s = await fetch('/api/status').then(x => x.json()).catch(() => null);
+  if (!s) return;
+  const promo = s.live_promotion || {};
+  const sources = s.source_health || {};
+  const latest = s.latest_run || {};
+  document.getElementById('readiness').innerHTML =
+    statusItem('Live env', s.live_trading_env_enabled ? 'enabled' : 'paper-only', s.live_trading_env_enabled ? 'warn' : 'ok')
+    + statusItem('Live promotion', promo.ready ? 'ready' : 'blocked', promo.ready ? 'ok' : 'bad')
+    + statusItem('Paper trades', String(promo.closed_paper_trades || 0), promo.ready ? 'ok' : 'warn')
+    + statusItem('Audit gate', promo.clean_audits ? 'clean' : 'blocked', promo.clean_audits ? 'ok' : 'bad')
+    + statusItem('Source health', sources.ok ? 'fresh' : 'stale: ' + (sources.stale_sources || []).join(', '), sources.ok ? 'ok' : 'bad')
+    + statusItem('Kill switch', s.kill_switch_active ? 'active' : 'off', s.kill_switch_active ? 'bad' : 'ok')
+    + statusItem('Latest approval', latest.approval || 'no run', latest.approval === 'approved' ? 'ok' : latest.approval ? 'warn' : 'warn')
+    + statusItem('Live reconcile', latest.live_reconciliation || 'no run', latest.live_reconciliation === 'clean' ? 'ok' : 'warn');
 }
 
 async function loadPortfolio() {
@@ -171,9 +236,10 @@ document.getElementById('runNow').addEventListener('click', async () => {
   document.getElementById('status').textContent = 'starting run...';
   const r = await fetch('/api/run-now', { method: 'POST' }).then(x => x.json()).catch(() => ({}));
   if (r.error) { document.getElementById('status').textContent = r.error; return; }
-  setTimeout(async () => { await loadRuns(); const p = document.getElementById('picker'); if (p.value) selectRun(p.value); }, 2500);
+  setTimeout(async () => { await loadRuns(); await loadStatus(); const p = document.getElementById('picker'); if (p.value) selectRun(p.value); }, 2500);
 });
 
 loadRuns();
+loadStatus();
 loadPortfolio();
 </script>

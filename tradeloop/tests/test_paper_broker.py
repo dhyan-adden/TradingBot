@@ -34,12 +34,23 @@ def test_router_blocks_when_kill_switch_exists(tmp_path) -> None:
 
 
 def test_live_promotion_gate_checks_thresholds(tmp_path) -> None:
-    root = tmp_path / "tradeloop"
-    memory = root / "memory"
-    memory.mkdir(parents=True)
-    (memory / "strategy_performance.md").write_text(
-        "paper_trades: 40\nwin_rate: 0.45\nexpectancy_r: 0.3\nmax_drawdown_pct: 8\n",
-        encoding="utf-8",
-    )
+    from pathlib import Path
 
-    assert live_promotion_ready(root)
+    from tradeloop.lib.audit.ledger import ORDER_FILLED, Ledger
+    from tradeloop.lib.config import load_settings
+
+    root = tmp_path / "tradeloop"
+    state = root / "state"
+    state.mkdir(parents=True)
+    led = Ledger(state / "ledger.db")
+    # 60 winning round trips, each +3R (entry 100, stop 90, exit 130). The ledger
+    # is the only source of truth - no runs dir means the audit gate is clean.
+    for i in range(60):
+        led.append({"type": ORDER_FILLED, "order_id": f"B{i}", "symbol": "RELIANCE",
+                    "side": "BUY", "quantity": 1, "fill_price": 100.0,
+                    "product": "CNC", "hard_stop": 90.0})
+        led.append({"type": ORDER_FILLED, "order_id": f"S{i}", "symbol": "RELIANCE",
+                    "side": "SELL", "quantity": 1, "fill_price": 130.0,
+                    "product": "CNC", "hard_stop": 0.0})
+    settings = load_settings(Path(__file__).resolve().parents[1] / "config" / "settings.yaml")
+    assert live_promotion_ready(root, settings) is True

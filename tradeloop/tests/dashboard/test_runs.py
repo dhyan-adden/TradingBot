@@ -103,6 +103,40 @@ def test_completed_intraday_run_is_not_still_running(tmp_path):
     assert "till running" not in runs[0].decision
 
 
+def test_read_run_handles_codex_list_orders_json(tmp_path):
+    # regression (live 2026-08-19): the Codex/OpenRouter path writes orders.json as
+    # a bare list of orders, not the dict {"orders": [...]} the deterministic router
+    # writes. render_decision must not crash on the list form.
+    d = _make_run(tmp_path, "2026-08-19_1610_premarket", False)
+    (d / "orders.json").write_text(json.dumps([
+        {"ticker": "CDSL", "side": "SELL", "quantity": 11, "price": None,
+         "reason": "stop_breach"},
+        {"ticker": "HDFCBANK", "side": "SELL", "quantity": 30, "price": None,
+         "reason": "stop_breach"},
+    ]))
+    out = read_run(d)
+    assert out["live"] is False
+    assert "Proposing to SELL 11" in out["decision"]["summary"]
+    runs = list_runs(tmp_path)
+    assert "Proposing to SELL 11" in runs[0].decision
+
+
+def test_read_run_renders_codex_markdown_stage(tmp_path):
+    d = _make_run(tmp_path, "2026-08-19_1610_premarket", False)
+    (d / "10_news.json").unlink()
+    (d / "10_news.md").write_text("""# 10_news.md
+
+## Macro context
+- Risk-off oil tape persists.
+- INR remains soft.
+""")
+    out = read_run(d)
+    news = next(stage for stage in out["stages"] if stage["stage"] == "10_news")
+    assert news["title"] == "News Expert"
+    assert news["summary"] == "Risk-off oil tape persists."
+    assert "INR remains soft." in news["points"]
+
+
 def test_stage_cards_show_the_model_that_actually_ran(tmp_path):
     # regression: the dashboard labelled cards from the OpenRouter routing config,
     # so a clean claude-backend run still showed "MiMo v2.5" / "MiniMax M3". The
@@ -116,6 +150,60 @@ def test_stage_cards_show_the_model_that_actually_ran(tmp_path):
     by_stage = {s["stage"]: s["model"] for s in out["stages"]}
     assert by_stage["10_news"] == "Claude Sonnet"
     assert by_stage["22_debate"] == "Claude Opus"
+
+
+def test_read_run_aggregates_llm_usage_and_cost(tmp_path):
+    d = _make_run(tmp_path, "2026-07-10_1606_premarket", True)
+    (d / "llm_calls.jsonl").write_text(
+        json.dumps({"role": "10_news", "used_model": True, "prompt_tokens": 100,
+                    "completion_tokens": 20, "total_tokens": 120,
+                    "cost_usd": 0.001, "cost_known": True}) + "\n"
+        + json.dumps({"role": "10_news", "used_model": False, "prompt_tokens": 0,
+                      "completion_tokens": 0, "total_tokens": 0,
+                      "cost_usd": 0.0, "cost_known": False}) + "\n")
+    usage = read_run(d)["usage"]
+    assert usage["calls"] == 2
+    assert usage["successful_calls"] == 1
+    assert usage["failed_calls"] == 1
+    assert usage["total_tokens"] == 120
+    assert usage["cost_usd"] == 0.001
+    assert usage["cost_known"] is True
+    assert usage["by_stage"]["10_news"]["calls"] == 2
+
+
+def test_read_run_includes_codex_usage(tmp_path):
+    d = _make_run(tmp_path, "2026-07-10_1606_premarket", True)
+    (d / "codex_usage.json").write_text(json.dumps({
+        "calls": 1, "successful_calls": 1, "failed_calls": 0,
+        "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150,
+        "cost_usd": 0.002, "cost_known": True,
+        "cost_source": "estimated_openrouter_pricing",
+    }))
+    usage = read_run(d)["usage"]
+    assert usage["calls"] == 1
+    assert usage["total_tokens"] == 150
+    assert usage["cost_usd"] == 0.002
+    assert usage["cost_source"] == "estimated_openrouter_pricing"
+    assert usage["by_stage"]["codex_orchestrator"]["total_tokens"] == 150
+
+
+def test_read_run_recovers_legacy_codex_log_usage(tmp_path):
+    runs_root = tmp_path / "tradeloop" / "runs"
+    d = _make_run(runs_root, "2026-08-19_1610_premarket", False)
+    (d / "10_news.json").unlink()
+    (d / "10_news.md").write_text("# News\n\n## Macro\n- Risk-off.\n")
+    logs = d.parents[1] / "reports" / "cycle_logs"
+    logs.mkdir(parents=True)
+    (logs / "cycle.log").write_text(
+        f"Prepared run directory: {d}\nmodel: minimax/minimax-m3\n\n"
+        "tokens used\n244,512\n")
+    usage = read_run(d)["usage"]
+    assert usage["calls"] == 1
+    assert usage["total_tokens"] == 244512
+    assert usage["cost_known"] is False
+    assert usage["by_stage"]["codex_orchestrator"]["handoffs"] == 1
+    news = next(stage for stage in read_run(d)["stages"] if stage["stage"] == "10_news")
+    assert news["model"] == "Codex / MiniMax M3"
 
 
 def test_failed_attempt_does_not_override_the_model_that_succeeded(tmp_path):

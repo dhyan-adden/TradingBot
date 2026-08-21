@@ -50,6 +50,35 @@ def test_trim_clamped_to_position(tmp_path):
     assert orders[0].quantity == 30   # never sell more than held
 
 
+def test_add_verdict_becomes_top_up_buy_at_ltp(tmp_path):
+    root = _root_with_position(tmp_path, qty=10, price=830.62, stop=760.0)
+    d = _run_dir(root)
+    (d / "holdings_ltp.json").write_text(json.dumps({"ltps": {"HDFCBANK": 812.5}}), encoding="utf-8")
+    _write_review(d, [{"ticker": "HDFCBANK", "verdict": "ADD", "conviction": 7.5,
+                       "reason_code": "thesis_strengthened", "rationale": "breakout held",
+                       "evidence": []}])
+    orders, stops = orchestrator._holdings_actions(d, "intraday", root)
+    assert len(orders) == 1
+    assert orders[0].side == "BUY"
+    assert orders[0].ticker == "HDFCBANK"
+    assert orders[0].quantity == 18
+    assert orders[0].price == 812.5
+    assert orders[0].hard_stop == 760.0
+    assert orders[0].reason == "add:thesis_strengthened"
+    assert stops == {}
+
+
+def test_add_never_opens_unheld_symbol(tmp_path):
+    root = _root_with_position(tmp_path)
+    d = _run_dir(root)
+    (d / "holdings_ltp.json").write_text(json.dumps({"ltps": {"RELIANCE": 1000.0}}), encoding="utf-8")
+    _write_review(d, [{"ticker": "RELIANCE", "verdict": "ADD", "conviction": 7.5,
+                       "reason_code": "thesis_strengthened", "rationale": "new idea",
+                       "evidence": []}])
+    orders, _ = orchestrator._holdings_actions(d, "intraday", root)
+    assert orders == []
+
+
 def test_stop_breach_forces_exit_even_if_review_missed_it(tmp_path):
     root = _root_with_position(tmp_path, stop=807.24)
     d = _run_dir(root)

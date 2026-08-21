@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+import select
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import date
-from typing import List, Protocol
+from typing import IO, List, Protocol, cast
 
 
 @dataclass(frozen=True)
@@ -26,11 +29,15 @@ class StdioTransport:
     ponytail: newline-delimited JSON-RPC by hand; adopt the official mcp python client
     only if streaming/notifications are ever needed."""
 
-    def __init__(self, command=("npm", "run", "-s", "mcp:zerodha")):
+    def __init__(self, command=("npm", "run", "-s", "mcp:zerodha"), timeout_seconds: float = 45.0):
         self._proc = subprocess.Popen(
-            list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1
+            list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
         )
+        self._stdin = cast(IO[bytes], self._proc.stdin)
+        self._stdout = cast(IO[bytes], self._proc.stdout)
+        self._stdout_buffer = b""
         self._id = 0
+        self._timeout_seconds = timeout_seconds
         self._rpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
@@ -41,21 +48,43 @@ class StdioTransport:
     def _rpc(self, method: str, params: dict) -> dict:
         self._id += 1
         msg = {"jsonrpc": "2.0", "id": self._id, "method": method, "params": params}
-        self._proc.stdin.write(json.dumps(msg) + "\n")
-        self._proc.stdin.flush()
+        self._stdin.write((json.dumps(msg) + "\n").encode())
+        self._stdin.flush()
+        deadline = time.monotonic() + self._timeout_seconds
         while True:
-            line = self._proc.stdout.readline()
-            if not line:
+            newline = self._stdout_buffer.find(b"\n")
+            if newline >= 0:
+                line = self._stdout_buffer[:newline]
+                self._stdout_buffer = self._stdout_buffer[newline + 1:]
+                if not line:
+                    continue
+                resp = json.loads(line.decode())
+                if resp.get("id") == self._id:
+                    if "error" in resp:
+                        raise RuntimeError(f"kite MCP error: {resp['error']}")
+                    return resp["result"]
+                continue
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self.close()
+                raise TimeoutError(
+                    f"kite MCP timed out waiting for {method} after {self._timeout_seconds:g}s"
+                )
+            ready, _, _ = select.select([self._stdout], [], [], remaining)
+            if not ready:
+                self.close()
+                raise TimeoutError(
+                    f"kite MCP timed out waiting for {method} after {self._timeout_seconds:g}s"
+                )
+            chunk = os.read(self._stdout.fileno(), 4096)
+            if not chunk:
                 raise RuntimeError("kite MCP closed stdout")
-            resp = json.loads(line)
-            if resp.get("id") == self._id:
-                if "error" in resp:
-                    raise RuntimeError(f"kite MCP error: {resp['error']}")
-                return resp["result"]
+            self._stdout_buffer += chunk
 
     def _notify(self, method: str, params: dict) -> None:
-        self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": method, "params": params}) + "\n")
-        self._proc.stdin.flush()
+        self._stdin.write((json.dumps({"jsonrpc": "2.0", "method": method, "params": params}) + "\n").encode())
+        self._stdin.flush()
 
     def call_tool(self, name: str, arguments: dict) -> dict:
         result = self._rpc("tools/call", {"name": name, "arguments": arguments})

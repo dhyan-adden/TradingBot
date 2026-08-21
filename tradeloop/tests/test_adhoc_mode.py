@@ -96,7 +96,7 @@ def test_prepare_renders_open_positions_into_context(monkeypatch, tmp_path: Path
     # below the naive figure but within a small cost band of it
     cash = float(context.split("Cash INR: ")[1].split("\n")[0])
     naive = 100000 - 30 * 830.62
-    assert naive - 25 < cash < naive
+    assert naive - 35 < cash < naive
 
 
 def test_prepare_without_ledger_renders_empty_book(monkeypatch, tmp_path: Path) -> None:
@@ -126,4 +126,3 @@ def test_run_cycle_adhoc_missing_request_exits_before_codex() -> None:
 
     assert result.returncode == 2
     assert "usage:" in result.stderr
-

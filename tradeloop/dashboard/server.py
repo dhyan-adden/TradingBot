@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 from tradeloop.dashboard.portfolio import portfolio_view
 from tradeloop.dashboard.runs import list_runs, read_run
+from tradeloop.dashboard.status import dashboard_status
 
 
 def _live_prices(symbols):
@@ -41,6 +42,19 @@ def launch_propose(repo_root: Path, python: str = sys.executable, launcher=subpr
     return ""
 
 
+def launch_paper_route(run_dir: Path, repo_root: Path, python: str = sys.executable,
+                       runner=subprocess.run) -> tuple[int, str]:
+    """Route one reviewed run through PaperBroker, never through Zerodha."""
+    env = dict(os.environ)
+    env["ZERODHA_ENABLE_TRADING"] = "false"
+    result = runner(
+        [python, "-m", "tradeloop.orchestrator", "route", str(run_dir)],
+        env=env, cwd=str(Path(repo_root)), capture_output=True, text=True,
+    )
+    output = (result.stdout or result.stderr or "").strip()
+    return result.returncode, output
+
+
 def _safe_run_dir(runs_dir: Path, name: str) -> Path | None:
     # only a direct child of runs_dir, no traversal
     candidate = (runs_dir / name).resolve()
@@ -62,7 +76,20 @@ def handle_api(path: str, query: dict, runs_dir: Path, price_fn=_live_prices) ->
     if path == "/api/portfolio":
         root = runs_dir.parent  # tradeloop/runs -> tradeloop
         return 200, portfolio_view(root / "state" / "ledger.db",
-                                   _starting_cash(root), price_fn=price_fn)
+                                    _starting_cash(root), price_fn=price_fn)
+    if path == "/api/status":
+        root = runs_dir.parent  # tradeloop/runs -> tradeloop
+        return 200, dashboard_status(root)
+    if path == "/api/route-paper":
+        name = (query.get("dir") or [""])[0]
+        d = _safe_run_dir(runs_dir, name)
+        if d is None:
+            return 400, {"error": "bad run dir"}
+        try:
+            rc, output = launch_paper_route(d, runs_dir.parent.parent)
+        except Exception as exc:
+            return 500, {"error": str(exc)}
+        return (200 if rc == 0 else 409), {"routed": rc == 0, "output": output}
     return 404, {"error": "not found"}
 
 
@@ -101,7 +128,7 @@ def make_handler(runs_dir: Path, static_dir: Path):
                     return self._json(500, {"error": str(exc)})
             self._json(404, {"error": "not found"})
 
-        def log_message(self, *args):  # quiet
+        def log_message(self, format, *args):  # quiet
             pass
 
     return Handler

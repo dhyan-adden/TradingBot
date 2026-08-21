@@ -35,3 +35,9 @@ def test_api_run_rejects_path_traversal(tmp_path):
 def test_api_unknown_route_404(tmp_path):
     status, _ = handle_api("/api/nope", {}, tmp_path)
     assert status == 404
+
+
+def test_api_paper_route_rejects_unknown_run(tmp_path):
+    status, body = handle_api("/api/route-paper", {"dir": ["missing"]}, tmp_path)
+    assert status == 400
+    assert body["error"] == "bad run dir"

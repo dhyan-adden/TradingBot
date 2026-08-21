@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from tradeloop.lib.data.evidence import uncited_news_candidates, validate_evidence
+from tradeloop.lib.data.evidence import (
+    canonicalize_evidence_ids,
+    uncited_news_candidates,
+    validate_evidence,
+)
 from tradeloop.lib.data.snapshot import Snapshot
 
 
@@ -24,6 +28,25 @@ def test_missing_cited_id_rejected(tmp_path):
     res = validate_evidence(tmp_path, _snap({"aaaaaaaaaaaa"}))
     assert res.ok is False
     assert ("20_bull.json", "ffffffffffff") in res.missing
+
+
+def test_canonicalize_repairs_unique_near_match():
+    data = {"names": [{"evidence": ["667a93b5a438"]}]}
+    repaired, corrections = canonicalize_evidence_ids(data, {"667a93b543f8"})
+
+    assert repaired["names"][0]["evidence"] == ["667a93b543f8"]
+    assert corrections == [{"from": "667a93b5a438", "to": "667a93b543f8"}]
+
+
+def test_canonicalize_preserves_ambiguous_or_distant_ids():
+    data = {"evidence": ["aaaaaaaaaaab", "ffffffffffff"]}
+    repaired, corrections = canonicalize_evidence_ids(
+        data,
+        {"aaaaaaaaaaaa", "aaaaaaaaaaac", "123456789abc"},
+    )
+
+    assert repaired == data
+    assert corrections == []
 
 
 def test_no_evidence_arrays_is_ok(tmp_path):

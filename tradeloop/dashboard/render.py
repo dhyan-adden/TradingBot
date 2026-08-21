@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -33,6 +34,9 @@ def label_model(slug: str) -> str:
         return ""
     if slug.startswith("claude:"):
         return "Claude " + slug.split(":", 1)[1].capitalize()
+    if slug.startswith("codex:"):
+        model = slug.split(":", 1)[1]
+        return "Codex / " + MODEL_LABELS.get(model, model)
     return MODEL_LABELS.get(slug, slug)
 
 
@@ -312,3 +316,36 @@ def render_stage(stage: str, raw: dict, model: str = "") -> StageView:
         summary, points = "", []
     return StageView(stage=stage, icon=icon, title=title, role=role, summary=summary,
                      points=points, model=label_model(model))
+
+
+def render_markdown_stage(stage: str, text: str, model: str = "") -> StageView:
+    """Render Codex-written Markdown when the structured stage JSON is absent."""
+    icon, title, role = _meta(stage)
+    candidates: list[str] = []
+    in_section = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith("---"):
+            if line.startswith("## "):
+                in_section = True
+            continue
+        if not in_section:
+            continue
+        if line.startswith("Source track applied:") or line.startswith("Reads:"):
+            continue
+        if line.startswith("|"):
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if (not cells or all(set(cell) <= {"-", ":", " "} for cell in cells)
+                    or ("ticker" in line.lower() and
+                        any(word in line.lower() for word in ("score", "tag", "read")))):
+                continue
+            line = " - ".join(cells)
+        line = re.sub(r"^[-*+]\s+", "", line)
+        line = re.sub(r"\*\*(.*?)\*\*", r"\1", line)
+        line = re.sub(r"`([^`]*)`", r"\1", line)
+        if line:
+            candidates.append(line)
+    summary = candidates[0] if candidates else "No structured summary was written."
+    points = candidates[1:13]
+    return StageView(stage=stage, icon=icon, title=title, role=role,
+                     summary=summary, points=points, model=label_model(model))

@@ -1,3 +1,6 @@
 SHELL=/bin/bash
 PATH=/Users/dhyanpatel/anaconda3/envs/tradingbot/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-* * * * * cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/cron_dispatch.sh >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1
+0 8 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/cron_dispatch.sh premarket >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1
+0 14 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/cron_dispatch.sh intraday >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1
+0 16 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && ./tradeloop/scripts/cron_dispatch.sh postclose >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1
+30 8-17 * * 1-5 cd /Volumes/D-DRIVE/TradingBot && /Users/dhyanpatel/anaconda3/envs/tradingbot/bin/python tradeloop/scripts/check_schedule_health.py >> /Volumes/D-DRIVE/TradingBot/tradeloop/reports/cron.log 2>&1

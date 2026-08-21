@@ -1,4 +1,6 @@
 from tradeloop.lib.audit.attribution import (
+    StrategyPerformance,
+    TradeAttribution,
     expected_r,
     render_strategy_performance,
     report,
@@ -137,3 +139,61 @@ def test_render_stopped_trade_drawdown():
     md = render_strategy_performance(perf, live_ready=False)
     assert _metric(md, "max_drawdown_pct") == 1.0
     assert _metric(md, "win_rate") == 0.0
+
+
+def _perf_with_realized(*rs: float) -> StrategyPerformance:
+    trades = [
+        TradeAttribution(
+            symbol=f"S{i}", strategy_family="s", expected_r=0.0, realized_r=r,
+            outcome=Outcome.THESIS_CORRECT_WON if r > 0 else Outcome.THESIS_CORRECT_STOPPED,
+            close_ref=f"r{i}",
+        )
+        for i, r in enumerate(rs)
+    ]
+    return StrategyPerformance(trades=list(trades), by_strategy=[], paper_trades=len(trades))
+
+
+def test_max_drawdown_r_from_equity_curve_not_worst_trade():
+    # Cumulative R: 1 -> 0.5 -> 0. Worst single trade is 0.5R, but the equity-curve
+    # drawdown from the peak is 1.0R. Promotion must see the curve, not the single loss.
+    perf = _perf_with_realized(1.0, -0.5, -0.5)
+    md = render_strategy_performance(perf)
+    assert _metric(md, "max_drawdown_r") == 1.0
+
+
+def test_max_drawdown_r_handles_initial_drawdown_from_zero():
+    # Cumulative R: -1 -> 1. The dip from the zero baseline is a 1.0R drawdown.
+    perf = _perf_with_realized(-1.0, 2.0)
+    md = render_strategy_performance(perf)
+    assert _metric(md, "max_drawdown_r") == 1.0
+
+
+def test_open_position_excluded_from_drawdown():
+    # An open buy never closes, so it is not a closed paper trade and contributes
+    # no realized-R to the equity curve.
+    of = OrdersFile(mode="postclose", orders=[_plan()])
+    fills = [_fill("TCS", "BUY", 10, 100.0)]
+    perf = report(of, fills)
+    md = render_strategy_performance(perf)
+    assert _metric(md, "paper_trades") == 0
+    assert _metric(md, "max_drawdown_r") == 0.0
+
+
+def test_no_stop_fill_not_counted_in_trade_count():
+    # A fill with no recorded hard stop is excluded; it must not inflate the count.
+    of = OrdersFile(mode="premarket", orders=[_plan(hard_stop=None)])
+    fills = [_fill("TCS", "BUY", 10, 100.0), _fill("TCS", "SELL", 10, 120.0)]
+    perf = report(of, fills)
+    assert perf.paper_trades == 0
+    assert perf.trades == []
+
+
+def test_rerun_over_same_ledger_is_idempotent():
+    # Re-attributing the same ledger must not duplicate trades; close_ref keys the
+    # journal so a second pass yields identical counts and stable refs.
+    of = OrdersFile(mode="premarket", orders=[_plan()])
+    fills = [_fill("TCS", "BUY", 10, 100.0), _fill("TCS", "SELL", 10, 120.0)]
+    perf_a = report(of, fills)
+    perf_b = report(of, fills)
+    assert perf_a.paper_trades == perf_b.paper_trades == 1
+    assert {t.close_ref for t in perf_a.trades} == {t.close_ref for t in perf_b.trades}

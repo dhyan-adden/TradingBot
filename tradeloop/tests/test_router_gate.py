@@ -121,6 +121,26 @@ def test_intraday_blocks_new_buy_allows_sell_exit(tmp_path: Path) -> None:
     assert broker.positions == {"RELIANCE": 3}
 
 
+def test_intraday_allows_position_management_add_only_for_held_symbol(tmp_path: Path) -> None:
+    book = tmp_path / "state" / "paper_book.jsonl"
+    seed = PaperBroker(cash_inr=1_000_000, slippage_bps=0)
+    append(book, [seed.place_order(OrderTicket("RELIANCE", "BUY", 5, 1000))])
+    broker = hydrate(book, starting_cash_inr=1_000_000)
+    orders, fills = _write(tmp_path, {"orders": [
+        {"ticker": "RELIANCE", "side": "BUY", "quantity": 20, "price": 1000,
+         "hard_stop": 950.0, "strategy_family": "position_management",
+         "reason": "add:thesis_strengthened"},
+        {"ticker": "TCS", "side": "BUY", "quantity": 5, "price": 3000,
+         "hard_stop": 2900.0, "strategy_family": "position_management",
+         "reason": "add:thesis_strengthened"},
+    ]})
+    routed = route_orders_file(orders, fills, broker, SETTINGS, root=ROOT, mode="intraday")
+    by_symbol = {r.payload.get("symbol"): r.status for r in routed}
+    assert by_symbol["RELIANCE"] == "FILLED"
+    assert by_symbol["TCS"] == "MODE_DISALLOWED"
+    assert broker.positions == {"RELIANCE": 25}
+
+
 def test_premarket_allows_new_buy(tmp_path: Path) -> None:
     # explicit mode="premarket" preserves the pre-gate happy path.
     orders, fills = _write(tmp_path, {"orders": [

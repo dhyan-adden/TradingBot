@@ -93,6 +93,21 @@ def test_call_json_validates_and_records_provenance(tmp_path, monkeypatch):
     assert rec["used_model"] is True
 
 
+def test_call_json_records_provider_reported_openrouter_cost(tmp_path, monkeypatch):
+    response = _load("or_ok_shortlist.json")
+    response["usage"] = {
+        "prompt_tokens": 120,
+        "completion_tokens": 60,
+        "total_tokens": 180,
+        "cost": 0.001234,
+    }
+    c, _ = _client(tmp_path, monkeypatch, [response])
+    c.call_json("14_shortlist", "system", "user", Shortlist)
+    rec = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[-1])
+    assert rec["cost_usd"] == 0.001234
+    assert rec["cost_known"] is True
+
+
 def test_call_json_injects_schema_field_names(tmp_path, monkeypatch):
     # Regression guard for the hollow-output bug: the model must SEE the schema
     # field names, else it invents prose keys and pydantic (extra="ignore")

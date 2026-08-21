@@ -2,6 +2,9 @@
 
 Agent-driven, India-only, news-discovery-first paper trading loop for cash equities.
 
+The current operational target is a safe, propose-only paper loop using live market data.
+Live promotion is intentionally not achieved until the ledger contains the configured closed-paper-trade history and all audit gates pass.
+
 Python does the deterministic work (data fetch, ticker extraction, indicators, sizing, cost model, portfolio state, broker payloads, hash-chained ledger, markdown memory).
 An LLM reasoning DAG does the judgment through file boundaries.
 Every order passes two deterministic gates before it can fill: the risk gate (`evaluate()`) and the cycle-mode gate (postclose never trades, intraday exits only).
@@ -92,6 +95,13 @@ python -m tradeloop.dashboard        # http://127.0.0.1:8765
 - `tradeloop/kill_switch.md` halts all orders.
 - `ZERODHA_ENABLE_TRADING=false` is the default and routes to paper; live routing additionally requires the strategy-performance promotion gate.
 - Code and scripts never read `.env` or print secret-like values.
+
+## Current Readiness
+
+- Implemented scanner families: `breakout_20d_pullback` and `ema_trend_pullback`.
+- Planned scanner families: post-earnings drift, results-day momentum, and sector-rotation leader.
+- The long-term validation-lab and hybrid-fund vision in `tradeloop/docs/vision.md` remains roadmap work.
+- Run `python tradeloop/scripts/verify_setup.py --health` before a data-backed cycle.
 
 ## Legacy engine-1
 

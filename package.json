@@ -6,7 +6,11 @@
   "scripts": {
     "auth:zerodha": "tsx scripts/zerodha-auth.ts",
     "env:status": "tsx scripts/env-status.ts",
+    "live:snapshot": "tsx scripts/zerodha-live-snapshot.ts",
+    "live:sync": "tsx scripts/zerodha-live-sync.ts",
     "mcp:zerodha": "tsx src/mcp/zerodha.ts",
+    "test": "npm run typecheck && npm run test:ts",
+    "test:ts": "tsx scripts/zerodha-live-snapshot.test.ts && tsx scripts/zerodha-live-sync.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

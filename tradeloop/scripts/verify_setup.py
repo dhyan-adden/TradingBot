@@ -71,7 +71,12 @@ def source_health(root: Path, max_age_hours: float = 26.0) -> list:
     report = root / "reports" / "source_health.json"
     if not report.exists():
         return ["_no_source_health_report_"]
-    data = _json.loads(report.read_text(encoding="utf-8")) or {}
+    try:
+        data = _json.loads(report.read_text(encoding="utf-8")) or {}
+    except (ValueError, OSError):
+        return ["_malformed_source_health_report_"]
+    if not isinstance(data, dict) or not data:
+        return ["_empty_source_health_report_"]
     now = datetime.now(timezone.utc)
     stale = []
     for source, last_success in data.items():

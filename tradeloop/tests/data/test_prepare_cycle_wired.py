@@ -7,7 +7,9 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
     # kills a regression where prepare_cycle keeps writing the empty NewsExtraction()/[] renderers
     called = {}
 
-    def fake_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
+    def fake_run(as_of, symbols=None, run_dir=None, config_dir=None, kite_client=None, source_health_root=None):
+        assert run_dir is not None
+        assert config_dir is not None
         called["run_dir"] = Path(run_dir)
         called["config_dir"] = Path(config_dir)
         called["kite_client"] = kite_client
@@ -32,11 +34,13 @@ def test_prepare_calls_ingest(monkeypatch, tmp_path):
     # wiring guard: prepare MUST pass source_health_root=base, else the health check's
     # source_health.json is never written and the deploy check goes permanently red.
     assert called["source_health_root"] == tmp_path
+    assert (run_dir / "03_market_regime.json").exists()
+    assert "Market Regime" in (run_dir / "03_market_regime.md").read_text()
 
 
 def test_prepare_degrades_not_aborts_on_ingest_failure(monkeypatch, tmp_path):
     # kills a regression where an ingest exception crashes the cycle instead of degrading loudly
-    def boom_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
+    def boom_run(as_of, symbols=None, run_dir=None, config_dir=None, kite_client=None, source_health_root=None):
         raise RuntimeError("all sources down")
 
     (tmp_path / "config").mkdir()
@@ -49,6 +53,7 @@ def test_prepare_degrades_not_aborts_on_ingest_failure(monkeypatch, tmp_path):
     run_dir = prepare_cycle.prepare("premarket", root=tmp_path)
     assert "NO NEWS DATA" in (run_dir / "01_news_raw.md").read_text()
     assert (run_dir / "02_setups_raw.md").exists()
+    assert (run_dir / "03_market_regime.json").exists()
     assert "all sources down" in (run_dir / "ingest_error.txt").read_text()
 
 
@@ -57,7 +62,8 @@ def _hermetic(monkeypatch, tmp_path, captured):
     (tmp_path / "memory").mkdir()
     (tmp_path / "config" / "settings.yaml").write_text("capital:\n  paper_starting_inr: 100000\n")
 
-    def fake_run(as_of, run_dir, config_dir, kite_client=None, source_health_root=None):
+    def fake_run(as_of, symbols=None, run_dir=None, config_dir=None, kite_client=None, source_health_root=None):
+        assert run_dir is not None
         captured["kite_client"] = kite_client
         from tradeloop.lib.data.snapshot import Snapshot
         return Snapshot(run_dir=Path(run_dir), snapshot_hash="h", news_ids=set(), news_available=False)

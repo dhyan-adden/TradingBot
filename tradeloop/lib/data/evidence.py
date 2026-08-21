@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from tradeloop.lib.data.snapshot import Snapshot
+
+
+_NEWS_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 
 
 @dataclass
@@ -39,6 +43,55 @@ def collect_cited_ids(run_dir: Path) -> Dict[str, List[str]]:
         if ids:
             cited[path.name] = ids
     return cited
+
+
+def canonicalize_evidence_ids(
+    node: Any,
+    valid_ids: set[str],
+    max_distance: int = 3,
+) -> tuple[Any, list[dict[str, str]]]:
+    """Correct obvious one-off copied news_id typos against the frozen snapshot.
+
+    This is intentionally narrow: only 12-char hex tokens inside an ``evidence``
+    array are eligible, and only when exactly one snapshot id is within the
+    distance threshold. Ambiguous or fabricated ids are preserved so the evidence
+    gate still blocks them.
+    """
+    corrections: list[dict[str, str]] = []
+    valid_ids = {str(v) for v in valid_ids}
+
+    def repair_id(news_id: str) -> str:
+        if news_id in valid_ids or not _NEWS_ID_RE.match(news_id):
+            return news_id
+        matches = [candidate for candidate in valid_ids
+                   if _hamming(news_id, candidate) <= max_distance]
+        if len(matches) != 1:
+            return news_id
+        corrected = matches[0]
+        corrections.append({"from": news_id, "to": corrected})
+        return corrected
+
+    def walk(value: Any) -> Any:
+        if isinstance(value, dict):
+            out = {}
+            for key, child in value.items():
+                if key == "evidence" and isinstance(child, list):
+                    out[key] = [repair_id(item) if isinstance(item, str) else item
+                                for item in child]
+                else:
+                    out[key] = walk(child)
+            return out
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        return value
+
+    return walk(node), corrections
+
+
+def _hamming(a: str, b: str) -> int:
+    if len(a) != len(b):
+        return max(len(a), len(b))
+    return sum(left != right for left, right in zip(a, b))
 
 
 def uncited_news_candidates(run_dir: Path) -> List[str]:

@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import json
+from dataclasses import asdict
+from pathlib import Path
+
+from tradeloop.lib.approval import validate_approval
+from tradeloop.lib.broker.live_state import load_reconciliation
+from tradeloop.lib.broker.router import live_enabled
+from tradeloop.lib.config import load_settings
+from tradeloop.lib.live.promotion import evaluate_live_promotion
+from tradeloop.lib.risk.circuit_breaker import kill_switch_active
+from tradeloop.scripts.verify_setup import source_health
+
+
+def _load_json(path: Path) -> dict | list | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _proposed_order_count(run_dir: Path) -> int:
+    orders = _load_json(run_dir / "orders.json")
+    if not isinstance(orders, dict):
+        return 0
+    return len(orders.get("orders") or [])
+
+
+def _latest_run(runs_dir: Path) -> dict | None:
+    if not runs_dir.is_dir():
+        return None
+    runs = sorted((p for p in runs_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+    if not runs:
+        return None
+    run_dir = runs[0]
+    proposed_orders = _proposed_order_count(run_dir)
+    fills = _load_json(run_dir / "fills.json")
+    controls = _load_json(run_dir / "controls.json")
+    reconcile = load_reconciliation(run_dir)
+
+    approval = "not_required"
+    if proposed_orders:
+        try:
+            approval_status = validate_approval(run_dir, run_dir / "orders.json")
+            approval = "approved" if approval_status.ok else "missing_or_invalid"
+        except (OSError, ValueError):
+            approval = "missing_or_invalid"
+
+    controls_status = "missing"
+    if isinstance(controls, dict):
+        severities = {str(d.get("severity", "")) for d in controls.get("deficiencies", [])}
+        if severities & {"material_weakness", "significant_deficiency"}:
+            controls_status = "critical_deficiency"
+        elif controls.get("deficiencies"):
+            controls_status = "deficiencies"
+        else:
+            controls_status = "clean"
+
+    return {
+        "dir": run_dir.name,
+        "proposed_orders": proposed_orders,
+        "approval": approval,
+        "routed": bool(fills),
+        "controls": controls_status,
+        "live_snapshot_present": (run_dir / "live_broker_snapshot.json").exists(),
+        "live_reconciliation": "missing" if reconcile is None else "clean" if reconcile.ok else "blocked",
+    }
+
+
+def _promotion(root: Path) -> dict:
+    try:
+        return asdict(evaluate_live_promotion(root, load_settings(root / "config" / "settings.yaml")))
+    except Exception:
+        return {
+            "ready": False,
+            "reasons": ["promotion status unavailable"],
+            "closed_paper_trades": 0,
+            "win_rate": 0.0,
+            "expectancy_r": 0.0,
+            "max_drawdown_r": 0.0,
+            "clean_audits": False,
+        }
+
+
+def dashboard_status(root: Path) -> dict:
+    root = Path(root)
+    stale_sources = source_health(root)
+    return {
+        "kill_switch_active": kill_switch_active(root),
+        "live_trading_env_enabled": live_enabled(),
+        "live_promotion": _promotion(root),
+        "source_health": {
+            "ok": not stale_sources,
+            "stale_sources": stale_sources,
+        },
+        "latest_run": _latest_run(root / "runs"),
+    }

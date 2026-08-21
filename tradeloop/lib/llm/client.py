@@ -43,6 +43,9 @@ class CallRecord:
     total_tokens: int
     used_model: bool
     reason: str = ""
+    estimated_input_chars: int = 0
+    cost_usd: float = 0.0
+    cost_known: bool = False
 
 
 def build_system_content(system: str, schema: type[BaseModel]) -> str:
@@ -93,7 +96,13 @@ class LLMClient:
         self.timeout_seconds = timeout_seconds
 
     def call_json(
-        self, role: str, system: str, user: str, schema: type[BaseModel], model: str | None = None
+        self,
+        role: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        model: str | None = None,
+        max_tokens: int | None = None,
     ) -> BaseModel:
         model = model or routing.model_for(role)
         api_key = os.getenv(self.api_key_env)  # only sanctioned secret read; never logged
@@ -101,6 +110,8 @@ class LLMClient:
             raise LLMConfigError(f"{self.api_key_env} not set")
 
         prompt = f"{system}\n\n{user}"
+        estimated_input_chars = len(prompt)
+        request_max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         # Give the model the exact output shape (shared with the claude transport).
         # Without this it invents prose keys that never match the pydantic fields,
         # so extra="ignore" silently defaults every field and returns hollow.
@@ -121,7 +132,7 @@ class LLMClient:
         for m in models:
             payload = {
                 "model": m,
-                "max_tokens": self.max_tokens,
+                "max_tokens": request_max_tokens,
                 # Best-effort structured-output nudge only. Correctness is guaranteed
                 # by our own brace-balanced extraction + pydantic validation below, so
                 # this stays broadly-supported (json_object, not strict json_schema
@@ -178,6 +189,9 @@ class LLMClient:
                     completion_tokens=int(body.get("usage", {}).get("completion_tokens", 0)),
                     total_tokens=int(body.get("usage", {}).get("total_tokens", 0)),
                     used_model=True,
+                    estimated_input_chars=estimated_input_chars,
+                    cost_usd=_cost_from_response(body),
+                    cost_known=_has_reported_cost(body),
                 ))
                 return validated
 
@@ -191,6 +205,28 @@ class LLMClient:
 
 def _failed_record(role: str, model: str, prompt: str, reason: str) -> CallRecord:
     return CallRecord(role, model, model, "", prompt, "", 0, 0, 0, False, reason)
+
+
+def _reported_cost(body: dict[str, Any]) -> float | None:
+    usage = body.get("usage", {})
+    if not isinstance(usage, dict):
+        usage = {}
+    for value in (usage.get("cost"), usage.get("total_cost"), body.get("cost")):
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _cost_from_response(body: dict[str, Any]) -> float:
+    return _reported_cost(body) or 0.0
+
+
+def _has_reported_cost(body: dict[str, Any]) -> bool:
+    return _reported_cost(body) is not None
 
 
 def _extract_output_text(body: dict[str, Any]) -> str:

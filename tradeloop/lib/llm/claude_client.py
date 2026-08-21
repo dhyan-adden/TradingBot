@@ -49,7 +49,8 @@ class ClaudeStageClient:
         self.per_call_timeout = per_call_timeout
 
     def call_json(self, role: str, system: str, user: str,
-                  schema: type[BaseModel], model: str | None = None) -> BaseModel:
+                  schema: type[BaseModel], model: str | None = None,
+                  max_tokens: int | None = None) -> BaseModel:
         model = model or routing.claude_model_for(role)
         system_content = build_system_content(system, schema)
         stdin_prompt = f"{_NO_TOOLS_PREAMBLE}{system_content}\n\n{user}"  # on stdin; no ARG_MAX

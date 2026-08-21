@@ -52,12 +52,17 @@ def _off(value: float, ref: float) -> float:
 
 def validate_grounding(orders, scan_levels: Dict[str, dict],
                        tol: float = GROUNDING_TOLERANCE) -> GroundingResult:
-    """Every order's entry (price) and hard_stop must sit within `tol` of the
-    scanner's real level for that ticker. A ticker absent from the scan has no
-    real stop and cannot be sized, so it is a violation. This makes the price
-    grounding deterministic instead of trusting the model to obey the prompt."""
+    """Every NEW BUY order's entry (price) and hard_stop must sit within `tol`
+    of the scanner's real level for that ticker. A ticker absent from the scan
+    has no real stop and cannot be sized, so it is a violation. This makes the
+    price grounding deterministic instead of trusting the model to obey the
+    prompt. Long-only system: SELL orders are exits priced at the live LTP by
+    the deterministic holdings path, never model-invented, so they are exempt."""
     violations: List[Tuple[str, str]] = []
     for order in orders:
+        side = str(_get(order, "side") or "").strip().upper()
+        if side == "SELL":
+            continue
         ticker = str(_get(order, "ticker") or "").strip().upper()
         lvl = scan_levels.get(ticker)
         if lvl is None:

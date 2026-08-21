@@ -54,6 +54,15 @@ def test_accepts_attribute_objects_not_just_dicts():
     assert validate_grounding([O()], SCAN).ok
 
 
+def test_seLL_exit_order_exempt_from_grounding():
+    # long-only: SELL orders are deterministic LTP-priced exits of existing
+    # positions with no scanner setup; they must never be blocked as ungrounded
+    res = validate_grounding(
+        [{"ticker": "CDSL", "side": "SELL", "price": 1345.9, "hard_stop": None}],
+        SCAN)
+    assert res.ok and res.violations == []
+
+
 def test_load_scan_levels_parses_frozen_setups(tmp_path):
     snap = tmp_path / "snapshot"
     snap.mkdir()

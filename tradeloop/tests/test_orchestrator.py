@@ -58,6 +58,22 @@ def test_run_reasoning_is_a_seam(monkeypatch, tmp_path) -> None:
     assert calls["mode"] == "premarket"
 
 
+def test_opencode_backend_selects_opencode_client(monkeypatch, tmp_path) -> None:
+    captured = {}
+
+    def fake_dag(run_dir, mode, timeout, client, settings=None, generated_by="", root=None):
+        captured["client"] = client
+        captured["generated_by"] = generated_by
+        return 0
+
+    monkeypatch.setattr(orchestrator, "_run_reasoning_dag", fake_dag)
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "opencode", 1)
+
+    assert rc == 0
+    assert captured["client"].__class__.__name__ == "OpenCodeStageClient"
+    assert captured["generated_by"] == "tradeloop.reasoning.opencode"
+
+
 def _fresh_root(tmp_path):
     """Copy the minimal config the orchestrator reads into an isolated root."""
     import shutil

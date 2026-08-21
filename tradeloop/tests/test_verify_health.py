@@ -23,6 +23,20 @@ def test_source_health_missing_file_is_unhealthy(tmp_path):
     assert vs.source_health(tmp_path) == ["_no_source_health_report_"]
 
 
+def test_source_health_malformed_file_is_unhealthy(tmp_path):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "source_health.json").write_text("{broken", encoding="utf-8")
+    assert vs.source_health(tmp_path) == ["_malformed_source_health_report_"]
+
+
+def test_source_health_empty_file_is_unhealthy(tmp_path):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "source_health.json").write_text("{}", encoding="utf-8")
+    assert vs.source_health(tmp_path) == ["_empty_source_health_report_"]
+
+
 def test_health_returns_3_when_source_missing(tmp_path, capsys):
     assert vs.health(tmp_path) == 3
     assert "FAIL" in capsys.readouterr().out

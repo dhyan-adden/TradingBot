@@ -20,3 +20,12 @@ legacy/state/realtest/
 tradeloop/config/universe_cache.json
 tradeloop/_scan_archive/
 tradeloop/reports/*.log
+
+# runtime output - run directories and cycle logs
+tradeloop/runs/
+tradeloop/reports/cycle_logs/
+tradeloop/reports/alerts.jsonl
+
+# runtime state snapshots
+tradeloop/state/live_book.json
+tradeloop/state/archive/

@@ -55,16 +55,32 @@ trading:
   side: LONG_ONLY
   zerodha_enable_trading: false
 
+execution:
+  approval_mode: human_in_loop
+  allow_auto_live: false
+  live_canary:
+    enabled: true
+    max_quantity: 1
+  promotion:
+    min_closed_paper_trades: 60
+    min_win_rate: 0.45
+    min_expectancy_r: 0.3
+    max_drawdown_r: 8.0
+    require_clean_audits: true
+
 costs:
   cnc_brokerage_inr: 0
   mis_brokerage_inr_max: 20
   mis_brokerage_pct: 0.0003
+  stt_buy_cnc_pct: 0.001
   stt_sell_cnc_pct: 0.001
   stt_sell_mis_pct: 0.00025
+  exchange_transaction_pct: 0.0000307
+  sebi_turnover_pct: 0.000001
   stamp_buy_cnc_pct: 0.00015
   stamp_buy_mis_pct: 0.00003
   gst_pct: 0.18
-  dp_charge_inr_per_scrip: 15.93
+  dp_charge_inr_per_scrip: 15.34
   slippage_bps:
     nifty50: 5
     next50: 10
@@ -75,6 +91,31 @@ memory:
   lessons_dedupe_similarity: 0.8
   strategy_min_trades_for_trust: 10
   dossier_curation_cadence_days: 7
+
+# Per-stage LLM budgets: a conservative character proxy for the sub-250K-context
+# constraint on smaller/free analysis models. Strong decision stages (debate,
+# PM) get larger budgets and are never silently truncated.
+llm_stages:
+  default_max_input_chars: 120000
+  default_max_output_tokens: 2500
+  default_model_tier: small_free
+  stages:
+    10_news:
+      max_input_chars: 80000
+      max_output_tokens: 2000
+      model_tier: small_free
+    14_shortlist:
+      max_input_chars: 120000
+      max_output_tokens: 3000
+      model_tier: small_free
+    22_debate:
+      max_input_chars: 160000
+      max_output_tokens: 4000
+      model_tier: strong_paid
+    41_pm_decision:
+      max_input_chars: 160000
+      max_output_tokens: 4000
+      model_tier: strong_paid
 
 live_promotion_gates:
   min_paper_trades: 40

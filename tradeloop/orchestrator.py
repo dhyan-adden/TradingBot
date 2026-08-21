@@ -7,12 +7,15 @@ import time
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
+from typing import cast
 
 from tradeloop.lib.audit import controls, reconcile
 from tradeloop.lib.audit.ledger import ORDER_FILLED, STOP_UPDATED, Ledger, LedgerTamperError
+from tradeloop.lib.approval import requires_live_human_approval, validate_approval
 from tradeloop.lib.audit.postclose import run_postclose_learning
 from tradeloop.lib.broker.orders_schema import load_orders
 from tradeloop.lib.broker.paper_book import append as append_book, hydrate
+from tradeloop.lib.broker.live_state import live_reconcile_allows_route, refresh_live_reconciliation
 from tradeloop.lib.broker.router import live_enabled, live_promotion_ready, route_orders_file
 from tradeloop.lib.config import load_settings, risk_caps
 from tradeloop.lib.data.evidence import uncited_news_candidates, validate_evidence
@@ -21,7 +24,9 @@ from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.llm import stages
 from tradeloop.lib.llm.claude_client import ClaudeStageClient
+from tradeloop.lib.llm.quality import quality_has_hard_block_new_buys
 from tradeloop.lib.llm.client import LLMClient
+from tradeloop.lib.llm.opencode_client import OpenCodeStageClient
 from tradeloop.lib.llm.schemas import AdhocIntake, HoldingsReview, Order, PMDecision, TradePlan
 from tradeloop.lib.risk.checks import RiskState
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
@@ -108,9 +113,19 @@ def _size_trade_plan(run_dir: Path, settings) -> None:
         encoding="utf-8")
 
 
+def _load_holdings_ltps(run_dir: Path) -> dict[str, float]:
+    ltp_path = run_dir / "holdings_ltp.json"
+    if not ltp_path.exists():
+        return {}
+    raw = json.loads(ltp_path.read_text(encoding="utf-8"))
+    source = raw.get("ltps", raw) if isinstance(raw, dict) else {}
+    return {k.strip().upper(): float(v) for k, v in source.items()}
+
+
 def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order], dict[str, float]]:
     """Deterministic money-path derivation from the holdings review. Intraday
-    EXIT/TRIM verdicts become SELL orders priced at the snapshotted LTP;
+    ADD verdicts become top-up BUY orders, EXIT/TRIM verdicts become SELL orders
+    priced at the snapshotted LTP;
     TIGHTEN_STOP verdicts become tighten-only stop updates (applied at route
     time, both modes). A held symbol whose LTP is at/below its recorded stop is
     force-exited even if the review missed it: the stop was approved when the
@@ -118,19 +133,25 @@ def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order]
     no orders ever - the market is closed and a paper fill would be fiction."""
     review = HoldingsReview.model_validate_json(
         (run_dir / "15_holdings_review.json").read_text(encoding="utf-8"))
-    ltp_path = run_dir / "holdings_ltp.json"
-    ltps: dict[str, float] = {}
-    if ltp_path.exists():
-        ltps = {k.strip().upper(): float(v)
-                for k, v in json.loads(ltp_path.read_text(encoding="utf-8")).items()}
+    ltps = _load_holdings_ltps(run_dir)
     state = _portfolio_state(root)
     positions, stops = state.positions, state.hard_stops
     reviewed = {r.ticker.strip().upper(): r for r in review.reviews}
+    settings = load_settings(root / "config" / "settings.yaml")
 
     orders: list[Order] = []
     if mode == "intraday":
         for sym, r in reviewed.items():
             qty, ltp = positions.get(sym, 0), ltps.get(sym)
+            if r.verdict == "ADD" and qty > 0 and ltp:
+                stop = float(r.new_stop or stops.get(sym, 0.0))
+                target_qty = _deterministic_qty(ltp, stop, settings) if stop > 0 else 0
+                add_qty = max(0, target_qty - qty)
+                if add_qty > 0:
+                    orders.append(Order(ticker=sym, side="BUY", quantity=add_qty, price=ltp,
+                                        hard_stop=stop, strategy_family="position_management",
+                                        reason=f"add:{r.reason_code}"))
+                continue
             if r.verdict not in ("EXIT", "TRIM") or qty <= 0 or not ltp:
                 continue  # no price or no position -> nothing routable
             sell_qty = qty if r.verdict == "EXIT" else min(r.exit_quantity or 0, qty)
@@ -210,18 +231,25 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
 
     - "openrouter" -> LLMClient (httpx -> OpenRouter): dormant fallback.
     - "claude"     -> ClaudeStageClient (claude -p per stage on your subscription).
+    - "opencode"   -> OpenCodeStageClient (OpenAI subscription + OpenRouter models).
 
     Returns match P0's contract: -1 on cycle-timeout, 0 on success, nonzero on failure.
     """
     backend = (backend or "openrouter").lower()
-    if backend not in ("openrouter", "claude"):
-        raise ValueError(f"unknown reasoning backend {backend!r} (use claude|openrouter)")
+    if backend not in ("openrouter", "claude", "opencode"):
+        raise ValueError(
+            f"unknown reasoning backend {backend!r} (use claude|opencode|openrouter)")
     if client is None:
-        client = (ClaudeStageClient(audit_path=run_dir / "llm_calls.jsonl")
-                  if backend == "claude"
-                  else LLMClient(audit_path=run_dir / "llm_calls.jsonl"))
-    generated_by = ("tradeloop.reasoning.claude" if backend == "claude"
-                    else "tradeloop.reasoning.p1")
+        if backend == "claude":
+            client = ClaudeStageClient(audit_path=run_dir / "llm_calls.jsonl")
+        elif backend == "opencode":
+            client = OpenCodeStageClient(audit_path=run_dir / "llm_calls.jsonl")
+        else:
+            client = LLMClient(audit_path=run_dir / "llm_calls.jsonl")
+    generated_by = {
+        "claude": "tradeloop.reasoning.claude",
+        "opencode": "tradeloop.reasoning.opencode",
+    }.get(backend, "tradeloop.reasoning.p1")
     return _run_reasoning_dag(run_dir, mode, timeout, client, settings, generated_by, root)
 
 
@@ -243,7 +271,8 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
                 intake = AdhocIntake.model_validate_json(
                     (run_dir / "05_adhoc_intake.json").read_text(encoding="utf-8"))
             else:
-                intake = stages.run_stage("05_adhoc_intake", run_dir, client)
+                intake = cast(AdhocIntake, stages.run_stage(
+                    "05_adhoc_intake", run_dir, client, settings=settings))
         except Exception as exc:  # same record-loudly contract as the DAG loop:
             # a bad intake must fail the cycle, not crash out or prune it hollow
             (run_dir / "reasoning_error.txt").write_text(
@@ -258,7 +287,7 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
             return -1
         try:
             if not _stage_done(run_dir, name):
-                stages.run_stage(name, run_dir, client)
+                stages.run_stage(name, run_dir, client, settings=settings)
             if name == "30_trade_plan" and settings is not None:
                 _size_trade_plan(run_dir, settings)  # deterministic qty, not the LLM's guess; idempotent on resume
         except Exception as exc:  # a stage that can't produce valid output must not
@@ -405,6 +434,19 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
                 print(f"tradeloop_cycle=PRICE_UNGROUNDED violations={len(gr.violations)} run_dir={run_dir}")
                 return 1
 
+        # Quality gate: a hard_block/new_buys quality line forbids any NEW BUY.
+        # SELL-only exit orders are still allowed (risk-managed unwinds), so a
+        # degraded research stage can never silently become a confident entry.
+        if quality_has_hard_block_new_buys(run_dir):
+            has_buy = any(str(o.side).upper() == "BUY" for o in orders)
+            if has_buy:
+                (run_dir / "quality_block.json").write_text(json.dumps({
+                    "reason": "hard_block/new_buys quality line present; BUY orders forbidden",
+                    "orders": n_orders,
+                }, indent=2), encoding="utf-8")
+                print(f"tradeloop_cycle=QUALITY_BLOCKED run_dir={run_dir}")
+                return 1
+
         print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
         return 0
 
@@ -517,6 +559,28 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
     if live_enabled() and not live_promotion_ready(root, settings):
         print("tradeloop_route=LIVE_NOT_READY")
         return 2
+    # Auto mode must not live-route unless the operator explicitly enabled
+    # allow_auto_live; otherwise the policy engine is not in force and skipping
+    # human approval would be unsafe. Human-in-loop is unaffected.
+    if live_enabled() and settings.approval_mode == "auto" and not settings.allow_auto_live:
+        print("tradeloop_route=AUTO_LIVE_DISABLED")
+        return 2
+    # Live human-in-loop: the run must carry an approval artifact bound to the
+    # exact orders.json. Auto mode skips this (it relies on the stricter policy
+    # gate instead) and must never reuse a stale human approval.
+    if live_enabled() and requires_live_human_approval(settings):
+        approval = validate_approval(run_dir, orders_path)
+        if not approval.ok:
+            print(f"tradeloop_route=APPROVAL_REQUIRED reasons={approval.reasons}")
+            return 2
+    # Live route must reflect real broker state: refresh a fresh reconciliation
+    # (read-only Zerodha snapshot -> deterministic check) before payloads. Paper
+    # routes never consult the broker snapshot.
+    if live_enabled():
+        refresh_live_reconciliation(run_dir, root, orders_path)
+        if not live_reconcile_allows_route(run_dir):
+            print("tradeloop_route=LIVE_RECONCILE_BLOCKED")
+            return 2
 
     with _global_lock(root) as acquired:
         if not acquired:
@@ -536,7 +600,8 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         # trailing token is the authoritative mode regardless of backend.
         cycle_mode = run_dir.name.rsplit("_", 1)[-1]
         try:
-            routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led, mode=cycle_mode)
+            routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led, mode=cycle_mode,
+                                       live_route_authorized=live_enabled())
         except Exception as exc:  # malformed orders.json -> loud abort, no routing
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
             print("tradeloop_route=ORDERS_INVALID")
@@ -609,7 +674,7 @@ def main(argv=None) -> int:
                              "resume this interrupted run in place (completed stages are "
                              "not re-billed)")
     parser.add_argument("--request", default="")
-    parser.add_argument("--backend", choices=["openrouter", "claude"], default=None,
+    parser.add_argument("--backend", choices=["openrouter", "claude", "opencode"], default=None,
                         help="reasoning backend; falls back to TRADELOOP_BACKEND env, then openrouter")
     parser.add_argument("--root", default=None,
                         help="tradeloop root override (isolated e2e tests / alt deployments)")

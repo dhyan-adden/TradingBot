@@ -12,7 +12,7 @@ class Order(BaseModel):
     side: Literal["BUY", "SELL"]
     product: Literal["CNC", "MIS"] = "CNC"
     quantity: int
-    price: float
+    price: float | None = None
     order_type: str = "LIMIT"
     hard_stop: float | None = None
     target_1: float | None = None
@@ -42,6 +42,8 @@ def load_orders(path: Path) -> OrdersFile:
 
 
 def to_ticket(order: Order) -> OrderTicket:
+    if order.price is None:
+        raise ValueError(f"missing execution price for {order.ticker} {order.side}")
     return OrderTicket(
         symbol=order.ticker.strip().upper(),
         side=order.side,

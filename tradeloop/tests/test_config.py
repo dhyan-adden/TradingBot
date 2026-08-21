@@ -47,7 +47,8 @@ def test_cost_model_defaults_match_settings_costs() -> None:
     params = inspect.signature(estimate_cost).parameters
     costs = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))["costs"]
     for key in ["cnc_brokerage_inr", "mis_brokerage_inr_max", "mis_brokerage_pct",
-                "stt_sell_cnc_pct", "stt_sell_mis_pct", "stamp_buy_cnc_pct",
+                "stt_buy_cnc_pct", "stt_sell_cnc_pct", "stt_sell_mis_pct",
+                "exchange_transaction_pct", "sebi_turnover_pct", "stamp_buy_cnc_pct",
                 "stamp_buy_mis_pct", "gst_pct", "dp_charge_inr_per_scrip"]:
         assert params[key].default == costs[key], key
 
@@ -55,18 +56,76 @@ def test_cost_model_defaults_match_settings_costs() -> None:
 from tradeloop.lib.broker.router import live_promotion_ready
 
 
-def test_promotion_gate_reads_thresholds_from_settings(tmp_path) -> None:
+def test_promotion_gate_ignores_markdown(tmp_path) -> None:
+    # Phase 6: live_promotion_ready delegates to the ledger/audit promotion
+    # service; a markdown performance report is no longer authoritative.
     root = tmp_path / "tradeloop"
     (root / "memory").mkdir(parents=True)
     (root / "memory" / "strategy_performance.md").write_text(
-        "paper_trades: 5\nwin_rate: 0.9\nexpectancy_r: 1.0\nmax_drawdown_pct: 1\n",
+        "live_ready: true\npaper_trades: 9999\nwin_rate: 0.9\nexpectancy_r: 5.0\n",
         encoding="utf-8",
     )
     settings = load_settings(ROOT / "config" / "settings.yaml")
-    # 5 paper trades < 40 required by settings -> not ready.
+    # No ledger -> not ready, markdown claims ignored.
     assert live_promotion_ready(root, settings) is False
 
-    class LooseSettings:
-        promotion_gates = {"min_paper_trades": 1, "min_win_rate": 0.1,
-                           "min_expectancy_r": 0.1, "max_drawdown_pct": 50}
-    assert live_promotion_ready(root, LooseSettings()) is True
+
+def test_execution_mode_defaults_are_safe() -> None:
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    assert settings.approval_mode == "human_in_loop"
+    assert settings.allow_auto_live is False
+    assert settings.live_canary_enabled is True
+    assert settings.live_canary_max_quantity == 1
+    assert settings.promotion_min_closed_paper_trades == 60
+    assert settings.promotion_min_win_rate == 0.45
+    assert settings.promotion_min_expectancy_r == 0.3
+    assert settings.promotion_max_drawdown_r == 8.0
+    assert settings.promotion_require_clean_audits is True
+
+
+def test_invalid_approval_mode_fails_to_load(tmp_path) -> None:
+    import pytest
+
+    root = tmp_path / "tradeloop"
+    (root / "config").mkdir(parents=True)
+    data = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+    data["execution"] = {"approval_mode": "weird_value"}
+    (root / "config" / "settings.yaml").write_text(
+        yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_settings(root / "config" / "settings.yaml")
+
+
+def test_live_ready_literal_cannot_enable_promotion(tmp_path) -> None:
+    root = tmp_path / "tradeloop"
+    (root / "memory").mkdir(parents=True)
+    (root / "memory" / "strategy_performance.md").write_text(
+        "live_ready: true\npaper_trades: 0\n", encoding="utf-8")
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    assert live_promotion_ready(root, settings) is False
+
+
+def test_live_ready_literal_with_59_trades_still_fails(tmp_path) -> None:
+    root = tmp_path / "tradeloop"
+    (root / "memory").mkdir(parents=True)
+    (root / "memory" / "strategy_performance.md").write_text(
+        "live_ready: true\npaper_trades: 59\n", encoding="utf-8")
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    assert live_promotion_ready(root, settings) is False
+
+
+def test_missing_performance_report_blocks_promotion(tmp_path) -> None:
+    root = tmp_path / "tradeloop"
+    (root / "memory").mkdir(parents=True)
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    assert live_promotion_ready(root, settings) is False
+
+
+def test_passing_trades_but_failing_expectancy_blocks_promotion(tmp_path) -> None:
+    root = tmp_path / "tradeloop"
+    (root / "memory").mkdir(parents=True)
+    (root / "memory" / "strategy_performance.md").write_text(
+        "paper_trades: 60\nwin_rate: 0.9\nexpectancy_r: 0.0\nmax_drawdown_pct: 1\n",
+        encoding="utf-8")
+    settings = load_settings(ROOT / "config" / "settings.yaml")
+    assert live_promotion_ready(root, settings) is False

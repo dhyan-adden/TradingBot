@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "//": "Project-local override: explore subagent does NOT pin a model here. Free (:free) model slugs are intentionally not used in this repo - they proved unreliable (model-not-found / 429 / empty content). The subagent inherits the default configured model.",
+  "agent": {
+    "explore": {
+      "tools": {
+        "bash": false
+      },
+      "permission": {
+        "bash": "deny"
+      }
+    }
+  },
+  "provider": {
+    "amazon-bedrock": {
+      "options": {
+        "region": "us-east-1"
+      }
+    }
+  }
+}

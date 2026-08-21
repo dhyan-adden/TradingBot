@@ -13,7 +13,8 @@ _DEFAULT_PY="/Users/dhyanpatel/anaconda3/envs/tradingbot/bin/python"
 TRADELOOP_PYTHON="${TRADELOOP_PYTHON:-$_DEFAULT_PY}"
 # Master orchestrator model. Must be one of the four OpenRouter models.
 TRADELOOP_MODEL="${TRADELOOP_MODEL:-minimax/minimax-m3}"
-# Reasoning agent: codex (OpenRouter, the 4 models) or claude (native Claude subagents).
+# Reasoning agent: opencode (mixed subscription/OpenRouter DAG), codex (legacy
+# single-process OpenRouter), or claude (native Claude subagents).
 TRADELOOP_AGENT="${TRADELOOP_AGENT:-codex}"
 
 case "$CYCLE" in
@@ -51,17 +52,22 @@ else
   RUN_DIR="${PREPARE_OUTPUT#tradeloop_run_dir=}"
 fi
 
-# Make the OpenRouter key available to the Codex model provider. Reads only this
-# one var, internally, and never prints it (same allowance as the Zerodha MCP).
-if [[ -z "${OPENROUTER_API_KEY:-}" && -f "$PROJECT_ROOT/.env" ]]; then
-  export OPENROUTER_API_KEY="$(grep '^OPENROUTER_API_KEY=' "$PROJECT_ROOT/.env" | head -1 | cut -d= -f2-)"
-fi
+# OPENROUTER_API_KEY must be injected into the environment by the caller
+# (launchd, a terminal session, or an agent harness). This script never reads
+# the env file or greps for the key; on a missing key the Codex provider fails loudly.
 
 INSTRUCTION="Run TradeLoop cycle: $CYCLE. Resume from: ${RESUME_FROM:-start}. Request: ${REQUEST_TEXT:-scheduled cycle}. Prepared run directory: $RUN_DIR. Carry-forward context file: $CARRY_FORWARD. Use this exact run directory only. Do not run prepare_cycle.py and do not create another run folder. Follow $PROMPT and write artifacts into $RUN_DIR."
 
 case "$TRADELOOP_AGENT" in
+  opencode|claude)
+    exec env ZERODHA_ENABLE_DATA=true "$TRADELOOP_PYTHON" \
+      -m tradeloop.orchestrator "$CYCLE" "$RUN_DIR" \
+      --backend "$TRADELOOP_AGENT" --request "$REQUEST_TEXT"
+    ;;
   codex)
-    exec "$PROJECT_ROOT/bin/codex-zerodha" --search -a never \
+    CODEX_EVENTS="$RUN_DIR/codex_events.jsonl"
+    set +e
+    "$PROJECT_ROOT/bin/codex-zerodha" --search -a never \
 	      --model "$TRADELOOP_MODEL" \
 	      -c 'model_provider="openrouter"' \
 	      -c 'model_providers.openrouter.name="OpenRouter"' \
@@ -69,16 +75,19 @@ case "$TRADELOOP_AGENT" in
 	      -c 'model_providers.openrouter.env_key="OPENROUTER_API_KEY"' \
 	      -c 'model_providers.openrouter.wire_api="responses"' \
 	      exec \
+	      --json \
 	      -s workspace-write \
 	      -C "$PROJECT_ROOT" \
 	      --skip-git-repo-check \
-	      "$INSTRUCTION"
+	      "$INSTRUCTION" | tee "$CODEX_EVENTS"
+    CODEX_RC=${PIPESTATUS[0]}
+    set -e
+    "$TRADELOOP_PYTHON" "$PROJECT_ROOT/tradeloop/scripts/record_codex_usage.py" \
+      --run-dir "$RUN_DIR" --events "$CODEX_EVENTS" --model "$TRADELOOP_MODEL" || true
+    exit "$CODEX_RC"
     ;;
   *)
-    # The claude backend no longer shells out here; the orchestrator runs the
-    # deterministic DAG in-process via ClaudeStageClient (python -m tradeloop.orchestrator
-    # premarket --backend claude). This entrypoint is the OpenRouter/codex path only.
-    echo "unknown TRADELOOP_AGENT: $TRADELOOP_AGENT (use codex)" >&2
+    echo "unknown TRADELOOP_AGENT: $TRADELOOP_AGENT (use opencode, claude, or codex)" >&2
     exit 2
     ;;
 esac

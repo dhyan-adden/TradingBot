@@ -128,6 +128,53 @@ def report(trade_plans, fills: List[dict]) -> StrategyPerformance:
     return StrategyPerformance(trades=trades, by_strategy=_aggregate(trades), paper_trades=len(trades))
 
 
+def _max_drawdown_r(realized: List[float]) -> float:
+    # True equity-curve drawdown in R: walk the cumulative realized-R curve from a
+    # zero baseline, track the running peak, and take the largest peak-to-trough dip.
+    # Unlike the worst-single-trade proxy, a cluster of small losses shows up here.
+    peak = 0.0
+    cur = 0.0
+    max_dd = 0.0
+    for r in realized:
+        cur += r
+        if cur > peak:
+            peak = cur
+        dd = peak - cur
+        if dd > max_dd:
+            max_dd = dd
+    return round(max_dd, 4)
+
+
+@dataclass(frozen=True)
+class PortfolioStats:
+    closed_trades: int
+    win_rate: float
+    expectancy_r: float
+    max_drawdown_r: float
+
+
+def portfolio_stats_from_fills(fills: List[dict]) -> PortfolioStats:
+    """Closed-paper-trade metrics from ledger ORDER_FILLED events only (no run's
+    trade_plans object). An episode opens on a BUY from flat and closes when the
+    position returns to zero; realized R uses the entry fill's stamped hard_stop."""
+    realized: List[float] = []
+    for ep in _episodes(fills):
+        entry = round(ep["buy_val"] / ep["buy_qty"], 6)
+        exit_price = round(ep["sell_val"] / ep["sell_qty"], 6)
+        stop = float(ep["entry_fill"].get("hard_stop") or 0.0)
+        risk = entry - stop
+        if stop <= 0 or risk <= 0:
+            continue  # R is undefined without a recorded stop - never fabricate
+        realized.append(round((exit_price - entry) / risk, 4))
+    closed = len(realized)
+    if closed == 0:
+        return PortfolioStats(0, 0.0, 0.0, 0.0)
+    wins = sum(1 for r in realized if r > 0)
+    win_rate = round(wins / closed, 4)
+    expectancy = round(sum(realized) / closed, 4)
+    return PortfolioStats(closed, win_rate, expectancy, _max_drawdown_r(realized))
+
+
 def _aggregate(trades: List[TradeAttribution]) -> List[StrategyStat]:
     groups: Dict[str, List[TradeAttribution]] = {}
     for t in trades:
@@ -150,9 +197,10 @@ def render_strategy_performance(perf: StrategyPerformance, live_ready: bool = Fa
     n = len(rs)
     win_rate = round(sum(1 for r in rs if r > 0) / n, 4) if n else 0.0
     expectancy_r = round(sum(rs) / n, 4) if n else 0.0
-    # ponytail: worst single-trade LOSS in R, floored at 0 so wins never register
-    #           as drawdown - a proxy, not a true equity-curve DD%. Upgrade to an
-    #           equity-curve drawdown if the gate ever needs real DD.
+    # True equity-curve drawdown in R (cumulative realized-R peak-to-trough).
+    max_drawdown_r = _max_drawdown_r([t.realized_r for t in perf.trades])
+    # DEPRECATED: worst single-trade LOSS in R, kept only for historical readability.
+    # Promotion must NOT gate on this; Phase 6 consumes `max_drawdown_r` instead.
     max_drawdown_pct = round(abs(min([0.0, *rs])), 4)
     lines = [
         "# Strategy Performance",
@@ -161,7 +209,8 @@ def render_strategy_performance(perf: StrategyPerformance, live_ready: bool = Fa
         f"paper_trades: {perf.paper_trades}",
         f"win_rate: {win_rate}",
         f"expectancy_r: {expectancy_r}",
-        f"max_drawdown_pct: {max_drawdown_pct}",
+        f"max_drawdown_r: {max_drawdown_r}",
+        f"max_drawdown_pct: {max_drawdown_pct}  # DEPRECATED: do not use as a gate input",
         "",
         "| Strategy | Trades | Win Rate | Expectancy R | Max Drawdown % | Confidence |",
         "| --- | ---: | ---: | ---: | ---: | --- |",

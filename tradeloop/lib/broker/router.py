@@ -9,7 +9,7 @@ from tradeloop.lib.audit.ledger import Ledger, RISK_VERDICT
 from tradeloop.lib.broker.orders_schema import load_orders, to_ticket
 from tradeloop.lib.broker.paper_broker import Fill, OrderTicket, PaperBroker
 from tradeloop.lib.broker.zerodha_mcp import to_zerodha_payload
-from tradeloop.lib.config import Settings
+from tradeloop.lib.config import Settings, load_settings
 from tradeloop.lib.config import risk_caps as risk_caps_from
 from tradeloop.lib.data.ticker_master import load_ticker_master
 from tradeloop.lib.risk.checks import RiskDecision, RiskState, evaluate
@@ -35,6 +35,20 @@ def _sides_for_mode(mode: str) -> set:
     return _MODE_ALLOWED_SIDES.get(str(mode).strip().lower(), {"BUY", "SELL"})
 
 
+def _side_allowed(mode: str, order, state: RiskState) -> bool:
+    side = str(order.side).strip().upper()
+    if side in _sides_for_mode(mode):
+        return True
+    symbol = str(order.ticker).strip().upper()
+    return (
+        str(mode).strip().lower() == "intraday"
+        and side == "BUY"
+        and symbol in state.positions
+        and str(order.strategy_family or "") == "position_management"
+        and str(order.reason or "").startswith("add:")
+    )
+
+
 @dataclass(frozen=True)
 class RoutedOrder:
     mode: str
@@ -51,6 +65,8 @@ def route_order(
     paper_broker: PaperBroker,
     confirm_live: bool = False,
     root: Path = Path("tradeloop"),
+    settings: "Settings | None" = None,
+    live_route_authorized: bool = False,
 ) -> RoutedOrder:
     if kill_switch_active(root):
         return RoutedOrder("blocked", "KILL_SWITCH_ACTIVE", {"symbol": ticket.symbol, "side": ticket.side})
@@ -59,27 +75,32 @@ def route_order(
         return RoutedOrder("paper", fill.status, fill.__dict__)
     if not live_promotion_ready(root):
         return RoutedOrder("blocked", "LIVE_PROMOTION_GATE_NOT_CLEARED", {"symbol": ticket.symbol, "side": ticket.side})
+    if not live_route_authorized:
+        return RoutedOrder("blocked", "LIVE_ROUTE_CONTEXT_REQUIRED", {
+            "symbol": ticket.symbol, "side": ticket.side,
+            "reason": "live payload generation requires route_cycle approval/reconciliation context",
+        })
+    if settings is None:
+        settings = load_settings(root / "config" / "settings.yaml")
+    # Live canary: first live rollout is mechanically one-share only. A BUY larger
+    # than max_quantity is blocked before any broker payload is built. SELL sizing is
+    # owned by the deterministic risk gate (Phase 9 adds broker-state checks).
+    if (settings.live_canary_enabled and str(ticket.side).strip().upper() == "BUY"
+            and int(ticket.quantity) > settings.live_canary_max_quantity):
+        return RoutedOrder("blocked", "LIVE_CANARY_BLOCKED", {
+            "symbol": ticket.symbol, "side": ticket.side, "quantity": ticket.quantity,
+            "max_quantity": settings.live_canary_max_quantity,
+        })
     payload = to_zerodha_payload(ticket, confirm=confirm_live)
+    # Payload generation is NOT execution: never update state/live_book.json
+    # here. The live expected-position book is mutated only by broker-confirmed
+    # fill sync, never by emitting a payload for Codex to send.
     return RoutedOrder("live_mcp_required", "READY_FOR_CODEX_TOOL_CALL", payload)
 
 
 def live_promotion_ready(root: Path = Path("tradeloop"), settings: "Settings | None" = None) -> bool:
-    performance = root / "memory" / "strategy_performance.md"
-    if not performance.exists():
-        return False
-    text = performance.read_text(encoding="utf-8").lower()
-    if "live_ready: true" in text:
-        return True
-    gates = settings.promotion_gates if settings else {}
-    min_trades = float(gates.get("min_paper_trades", 40))
-    min_win = float(gates.get("min_win_rate", 0.45))
-    min_exp = float(gates.get("min_expectancy_r", 0.3))
-    max_dd = float(gates.get("max_drawdown_pct", 8))
-    paper_trades = _metric(text, "paper_trades")
-    win_rate = _metric(text, "win_rate")
-    expectancy = _metric(text, "expectancy_r")
-    drawdown = _metric(text, "max_drawdown_pct")
-    return paper_trades >= min_trades and win_rate >= min_win and expectancy >= min_exp and drawdown <= max_dd
+    from tradeloop.lib.live import promotion as promotion_service
+    return promotion_service.evaluate_live_promotion(root, settings).ready
 
 
 def _metric(text: str, key: str) -> float:
@@ -137,6 +158,20 @@ def _scan_symbols(run_dir: Path) -> set:
     return out
 
 
+def _resolve_market_price(order, run_dir: Path):
+    """Use the run's captured LTP for paper simulation of MARKET orders."""
+    if order.price is not None or str(order.order_type).upper() != "MARKET":
+        return order
+    try:
+        snapshot = json.loads((run_dir / "holdings_ltp.json").read_text(encoding="utf-8"))
+        price = snapshot.get("ltps", {}).get(order.ticker.strip().upper())
+    except (OSError, ValueError, AttributeError):
+        price = None
+    if price is None:
+        raise ValueError(f"missing captured LTP for MARKET order {order.ticker}")
+    return order.model_copy(update={"price": float(price)})
+
+
 def route_orders_file(
     orders_path: Path,
     fills_path: Path,
@@ -145,6 +180,7 @@ def route_orders_file(
     root: Path = Path("tradeloop"),
     ledger: "Ledger | None" = None,
     mode: str = "premarket",
+    live_route_authorized: bool = False,
 ) -> list[RoutedOrder]:
     of = load_orders(orders_path)  # typed; raises on malformed -> cycle aborts loudly
     records = load_ticker_master(root / "config" / "universe.yaml")
@@ -162,7 +198,6 @@ def route_orders_file(
                      | {r.symbol.upper() for r in records}
                      | {s.upper() for s in book.positions})
     caps = risk_caps_from(settings, symbols, _equity(book))  # capital base fixed at start-of-batch equity
-    allowed_sides = _sides_for_mode(mode)
     decisions_path = orders_path.parent / "decisions.jsonl"
     routed: list[RoutedOrder] = []
     for order in of.orders:  # held[] intentionally skipped in Phase 0
@@ -171,8 +206,9 @@ def route_orders_file(
         # count, sector) when the next order is gated. Built once, a second order
         # would be judged against stale pre-batch state and could breach them.
         state = _risk_state(book, sectors)
+        order = _resolve_market_price(order, orders_path.parent)
         ticket = to_ticket(order)
-        if ticket.side.strip().upper() not in allowed_sides:
+        if not _side_allowed(mode, order, state):
             # Out-of-mode order (e.g. a BUY in intraday/postclose): block before the
             # risk gate so a wrong-cycle new entry can never fill. Recorded like any
             # other rejection for the audit trail.
@@ -186,7 +222,8 @@ def route_orders_file(
                 outcome = RoutedOrder("blocked", "RISK_REJECTED",
                                       {"symbol": ticket.symbol, "reasons": verdict.reasons})
             else:
-                outcome = route_order(ticket, book, root=root)
+                outcome = route_order(ticket, book, root=root, settings=settings,
+                                      live_route_authorized=live_route_authorized)
         routed.append(outcome)
         append_decision(decisions_path, order, verdict, outcome)
         if ledger is not None:
