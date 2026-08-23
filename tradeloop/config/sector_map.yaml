@@ -1,0 +1,148 @@
+# Sector mapping for major Nifty500 constituents.
+# Used by scan_sector_leaders to compute per-sector breadth and identify
+# the leading name in a sector that is showing rotation.
+# Coverage: ~80 high-liquidity names across 12 sectors.
+# Extend this file to improve sector breadth accuracy.
+
+sectors:
+  Financial Services:
+    - HDFCBANK
+    - ICICIBANK
+    - SBIN
+    - AXISBANK
+    - KOTAKBANK
+    - BAJFINANCE
+    - BAJAJFINSV
+    - HDFCLIFE
+    - SBILIFE
+    - ICICIPRULI
+    - ICICIGI
+    - CDSL
+    - BSE
+    - DCBBANK
+    - FEDERALBNK
+    - IDFCFIRSTB
+    - BANDHANBNK
+    - PNB
+    - CANBK
+    - UNIONBANK
+
+  Information Technology:
+    - TCS
+    - INFY
+    - WIPRO
+    - HCLTECH
+    - TECHM
+    - LTIM
+    - MPHASIS
+    - COFORGE
+    - PERSISTENT
+    - HAPPSTMNDS
+    - LTTS
+
+  Energy:
+    - RELIANCE
+    - ONGC
+    - NTPC
+    - POWERGRID
+    - ADANIGREEN
+    - ADANITRANS
+    - TATAPOWER
+    - TORNTPOWER
+    - CESC
+    - JSWENERGY
+
+  Consumer Staples:
+    - HINDUNILVR
+    - ITC
+    - NESTLEIND
+    - BRITANNIA
+    - GODREJCP
+    - DABUR
+    - MARICO
+    - COLPAL
+    - GILLETTE
+    - UBL
+
+  Consumer Discretionary:
+    - TITAN
+    - TRENT
+    - DMART
+    - TATACONSUM
+    - JUBLFOOD
+    - DEVYANI
+    - SAPPHIRE
+    - BATA
+    - PAGEIND
+    - KALYANKJIL
+
+  Automobile:
+    - MARUTI
+    - TATAMOTORS
+    - BAJAJ-AUTO
+    - HEROMOTOCO
+    - M&M
+    - EICHERMOT
+    - TVSMOTOR
+    - ASHOKLEY
+    - BHARATFORG
+    - MOTHERSON
+
+  Pharmaceuticals:
+    - SUNPHARMA
+    - DRREDDY
+    - CIPLA
+    - DIVISLAB
+    - AUROPHARMA
+    - LUPIN
+    - TORNTPHARM
+    - NATCOPHARM
+    - APLLTD
+    - JBCHEPHARM
+
+  Metals & Mining:
+    - TATASTEEL
+    - HINDALCO
+    - JSWSTEEL
+    - VEDL
+    - HINDZINC
+    - NATIONALUM
+    - NMDC
+    - COALINDIA
+    - SAIL
+    - APLAPOLLO
+
+  Infrastructure & Construction:
+    - LT
+    - ULTRACEMCO
+    - GRASIM
+    - SHREECEM
+    - ACC
+    - AMBUJACEMENT
+    - NCC
+    - KEI
+    - POLYCAB
+    - SIEMENS
+
+  Telecom:
+    - BHARTIARTL
+    - IDEA
+    - TATACOMM
+    - HFCL
+
+  Chemicals:
+    - SRF
+    - DEEPAKFERT
+    - NAVINFLUOR
+    - AAVAS
+    - GRAVITA
+    - ADVENZYMES
+    - IOLCP
+
+  Real Estate:
+    - DLF
+    - GODREJIND
+    - PRESTIGE
+    - OBEROIRLTY
+    - PHOENIXLTD
+    - SOBHA

@@ -195,6 +195,40 @@ def _legacy_codex_usage(run_dir: Path) -> dict | None:
     return None
 
 
+def _load_fills(run_dir: Path) -> list | None:
+    """Returns the fills list if fills.json exists with real content, None otherwise.
+    An empty [] placeholder from prepare_cycle (no routed orders) returns [] not None
+    so the caller can distinguish 'never routed' (None) from 'routed with no fills' ([])."""
+    fills_path = run_dir / "fills.json"
+    if not fills_path.exists():
+        return None
+    try:
+        raw = json.loads(fills_path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, list) else None
+    except (ValueError, OSError):
+        return None
+
+
+def _conviction_block_summary(run_dir: Path) -> str | None:
+    """Returns a human-readable summary from fills_summary.md if the run was
+    conviction-blocked (no fills.json, but fills_summary.md says BLOCKED)."""
+    summary_path = run_dir / "fills_summary.md"
+    if not summary_path.exists():
+        return None
+    try:
+        text = summary_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if "result: BLOCKED" not in text:
+        return None
+    for line in text.splitlines():
+        if line.startswith("block_reason:"):
+            reason = line.split(":", 1)[1].strip()
+            return f"Blocked by conviction gate: {reason}"
+    return "Blocked by conviction gate before routing."
+
+
+
 def list_runs(runs_dir: Path) -> list[RunSummary]:
     runs_dir = Path(runs_dir)
     if not runs_dir.exists():
@@ -209,7 +243,13 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
         elif not orders:
             summary = IN_FLIGHT
         else:
-            summary = render_decision(_orders_dict(orders)).summary
+            fills = _load_fills(d)
+            summary = render_decision(_orders_dict(orders), fills=fills).summary
+            # Conviction-blocked runs have no fills.json; show the actual outcome
+            if fills is None:
+                block_summary = _conviction_block_summary(d)
+                if block_summary:
+                    summary = block_summary
         out.append(RunSummary(dir_name=d.name, mode=_mode(d.name), decision=summary))
     return out
 
@@ -249,12 +289,19 @@ def read_run(run_dir: Path) -> dict:
             view = render_stage(stage, raw, models.get(stage, ""))
         stages.append(asdict(view))
     orders = _load(run_dir / "orders.json") or {}
-    decision = asdict(render_decision(_orders_dict(orders), models.get("41_pm_decision", "")))
+    fills = _load_fills(run_dir)
+    decision = asdict(render_decision(_orders_dict(orders), models.get("41_pm_decision", ""),
+                                      fills=fills))
     err_path = run_dir / "reasoning_error.txt"
     error = err_path.read_text(encoding="utf-8").strip() if err_path.exists() else ""
     if error:
         # a crashed run must NOT read as a clean "hold" - say so plainly
         decision["summary"] = "This run did not finish - " + error.splitlines()[0]
+    # Conviction-blocked runs have no fills.json; override summary to reflect it
+    if fills is None and not error:
+        block_summary = _conviction_block_summary(run_dir)
+        if block_summary:
+            decision["summary"] = block_summary
     # end-of-run marker = the orders.json DICT _run_reasoning writes for every mode
     # (intraday/postclose skip the PM stage, so 41_pm_decision.json can't mark it;
     # prepare's placeholder is the list [], which _load-or-{} leaves falsy)

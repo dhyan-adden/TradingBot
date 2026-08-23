@@ -11,7 +11,7 @@ Reads:
 
 Writes: `15_holdings_review.md`.
 
-Rules:
+## General rules
 
 - Review ONLY tickers currently held per `00_context.md`. Never introduce new names.
 - Exactly one verdict per holding: HOLD, ADD, TIGHTEN_STOP, TRIM, or EXIT.
@@ -32,5 +32,53 @@ Rules:
   today's inputs, not the entry-day optimism.
 - carry_forward: 3-6 sentences for the next session covering verdicts, levels
   to watch, and pending events (earnings, tripwires).
+
+## Strategy-specific sell conditions
+
+Every position was opened with a named `strategy_family`. Apply the rules below
+in addition to the hard stop check. The `exit_rule` field in `02_setups_raw.md`
+also carries the entry-time sell condition for each setup - cross-reference it.
+
+### 20d_breakout
+- **STOP**: price <= entry - 1.5 × ATR → EXIT (stop_breach)
+- **THESIS_BREAK → EXIT**: daily close falls back below the 20-day high that
+  was broken at entry (failed breakout, original signal gone)
+- **TRIM 50 %**: first target (entry + 3 × ATR, i.e. 2R) reached
+- **EXIT remaining**: second target (entry + 4.5 × ATR, i.e. 3R) reached
+
+### ema20_pullback
+- **STOP**: price <= entry - 1.5 × ATR → EXIT (stop_breach)
+- **THESIS_BREAK → EXIT**: daily close below EMA50 (uptrend stack broken)
+- **THESIS_BREAK → EXIT or TRIM**: EMA20 has been flat or declining for 3+
+  consecutive sessions (dynamic support failing)
+- **TIGHTEN_STOP to breakeven**: first target (2R) reached, thesis still intact
+- **EXIT remaining**: second target (3R) reached
+
+### post_earnings_drift
+- **STOP**: gap fills (close < gap-day opening price) OR price <= entry - 1.5 × ATR
+  → EXIT (stop_breach or thesis_break)
+- **EVENT_RISK → EXIT**: negative earnings revision, guidance cut, or analyst
+  downgrade appears in today's news
+- **TRIM 50 %** at first target (2R) if holding 5 or more days
+- **EXIT remaining** at second target (3R) OR once 15 days have elapsed since
+  entry (drift window complete)
+
+### results_momentum
+- **STOP**: price <= results-day low - ATR/2 → EXIT (stop_breach)
+- **THESIS_BREAK → EXIT**: close falls below the lower 50 % of the results-day
+  candle's range (momentum stalled, gap beginning to fill)
+- **TRIM** at first target (2R)
+- **Hard EXIT**: 5 calendar days after entry regardless of price (short-horizon
+  play; do not hold into the next results cycle)
+
+### sector_rotation_leader
+- **STOP**: price <= entry - 1.5 × ATR → EXIT (stop_breach)
+- **THESIS_BREAK → EXIT**: sector breadth drops below 30 % of the sector's
+  tracked names (rotation ending, institutional flow reversing)
+- **THESIS_BREAK → EXIT**: close below own EMA50 (individual leadership lost)
+- **TRIPWIRE → TRIM**: name underperforms the sector average for 3 or more
+  consecutive sessions (relative strength deteriorating)
+- **TIGHTEN_STOP to breakeven**: first target (2R) reached, rotation still alive
+- **EXIT remaining**: second target (3R) reached
 
 Output: one review per holding plus the carry_forward summary.

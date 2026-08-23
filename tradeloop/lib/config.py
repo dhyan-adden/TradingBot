@@ -29,6 +29,7 @@ class Settings:
     promotion_min_expectancy_r: float
     promotion_max_drawdown_r: float
     promotion_require_clean_audits: bool
+    auto_route_min_conviction: float
     llm_stage_budgets: dict
     cycle_timeout_seconds: int
 
@@ -64,6 +65,7 @@ def load_settings(path: Path) -> Settings:
         promotion_min_expectancy_r=float(promo.get("min_expectancy_r", 0.3)),
         promotion_max_drawdown_r=float(promo.get("max_drawdown_r", 8.0)),
         promotion_require_clean_audits=bool(promo.get("require_clean_audits", True)),
+        auto_route_min_conviction=float(execution.get("auto_route_min_conviction", 7.0)),
         llm_stage_budgets=dict(data.get("llm_stages", {}) or {}),
         cycle_timeout_seconds=int(data.get("cycle_timeout_seconds", 1200)),
     )

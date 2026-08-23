@@ -66,10 +66,16 @@ def render_news_raw(stories, macro, news_available: bool) -> str:
 def render_setups(setups) -> str:
     lines = ["# Raw Technical Setups", ""]
     for scan in setups:
-        lines.append(
-            f"- {scan.ticker}: {scan.setup_type}, score={scan.cleanliness_score}, "
-            f"entry={scan.entry_zone}, stop={scan.stop_zone}, targets={scan.target_zone}, volume={scan.volume_context}"
+        family = getattr(scan, "strategy_family", "") or scan.setup_type
+        exit_r = getattr(scan, "exit_rule", "")
+        base = (
+            f"- {scan.ticker}: {scan.setup_type} [{family}], score={scan.cleanliness_score}, "
+            f"entry={scan.entry_zone}, stop={scan.stop_zone}, targets={scan.target_zone}, "
+            f"volume={scan.volume_context}"
         )
+        if exit_r:
+            base += f", exit_rule=({exit_r})"
+        lines.append(base)
     lines.append("")
     return "\n".join(lines)
 

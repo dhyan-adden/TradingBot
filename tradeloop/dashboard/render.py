@@ -264,13 +264,36 @@ def _risk(raw: dict) -> tuple[str, list[str]]:
     return summary, points
 
 
-def render_decision(orders_json: dict, model: str = "") -> StageView:
+def render_decision(orders_json: dict, model: str = "",
+                    fills: list | None = None) -> StageView:
+    """Render the PM decision card.
+
+    fills=None means no fills.json yet (human-in-loop pending, or conviction-blocked
+    before route_cycle was called). fills=[] or a list means route_cycle ran.
+    """
     icon, title, role = _meta("41_pm_decision")
     orders = (orders_json or {}).get("orders") or []
+
     if not orders:
         summary = "Holding today - nothing convincing enough to propose."
-        points = []
+        points: list[str] = []
+    elif fills is not None:
+        # route_cycle was called (auto mode); summarise by what actually happened
+        filled = [f for f in fills if f.get("status") == "FILLED"]
+        rejected = [f for f in fills if f.get("status") == "RISK_REJECTED"]
+        if filled:
+            sym = (filled[0].get("payload") or {}).get("symbol") or orders[0].get("ticker", "?")
+            qty = (filled[0].get("payload") or {}).get("quantity") or orders[0].get("quantity", "?")
+            rej_note = f", {len(rejected)} risk-rejected" if rejected else ""
+            summary = f"Auto-routed: {sym} \u00d7 {qty} shares filled ({len(filled)} filled{rej_note})."
+        elif rejected:
+            summary = f"Auto-routed but risk gate rejected all {len(rejected)} order(s)."
+        else:
+            summary = f"Auto-routed: {len(orders)} order(s) processed."
+        points = [f"{o.get('side','BUY')} {o.get('quantity','?')} {pretty_ticker(o.get('ticker',''))} "
+                  f"@ {o.get('price','?')} - {o.get('reason','')}" for o in orders]
     else:
+        # human-in-loop: orders proposed, awaiting approval
         first = orders[0]
         summary = (f"Proposing to {first.get('side','BUY')} {first.get('quantity','?')} shares of "
                    f"{pretty_ticker(first.get('ticker',''))} at {first.get('price','?')}.")

@@ -24,17 +24,32 @@ def _uptrend_candles(n=60):
 
 
 def test_scan_symbol_skips_when_too_few_candles():
-    # kills a regression that drops the < 30 candle guard when switching to Kite input
+    # scan_symbol returns [] when fewer than 30 candles are available
     kc = OneSymbolKite(_uptrend_candles(10))
-    assert scanner.scan_symbol("INFY", kc, date(2026, 7, 1)) is None
+    assert scanner.scan_symbol("INFY", kc, date(2026, 7, 1)) == []
 
 
 def test_scan_symbol_uses_real_atr_no_fabrication():
     # kills the `latest * 0.02` fabricated-ATR bug: stop must derive from real ATR14
     kc = OneSymbolKite(_uptrend_candles(60))
-    scan = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
-    assert scan is not None
+    scans = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
+    assert scans, "expected at least one setup"
+    scan = scans[0]
     assert float(scan.stop_zone) < float(scan.entry_zone)
+
+
+def test_scan_symbol_returns_list():
+    kc = OneSymbolKite(_uptrend_candles(60))
+    result = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
+    assert isinstance(result, list)
+
+
+def test_scan_symbol_strategy_family_populated():
+    kc = OneSymbolKite(_uptrend_candles(60))
+    scans = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
+    for s in scans:
+        assert s.strategy_family, f"strategy_family is empty on {s.setup_type}"
+        assert s.exit_rule, f"exit_rule is empty on {s.setup_type}"
 
 
 def test_scan_targets_are_2r_and_3r_of_stop_distance():
@@ -42,8 +57,9 @@ def test_scan_targets_are_2r_and_3r_of_stop_distance():
     # structurally unable to clear the 0.3R promotion-gate expectancy after costs.
     # Targets are now R multiples of the actual stop distance: T1 = 2R, T2 = 3R.
     kc = OneSymbolKite(_uptrend_candles(60))
-    scan = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
-    assert scan is not None
+    scans = scanner.scan_symbol("INFY", kc, date(2026, 7, 1))
+    assert scans
+    scan = scans[0]
     entry, stop = float(scan.entry_zone), float(scan.stop_zone)
     t1, t2 = (float(x) for x in scan.target_zone.split("/"))
     risk = entry - stop
@@ -55,7 +71,8 @@ def test_scan_universe_bounded_by_max_fetch():
     # kills an unbounded scan that would hammer Kite for the full universe every cycle
     kc = OneSymbolKite(_uptrend_candles(60))
     scans = scanner.scan_universe(["A", "B", "C", "D"], kc, date(2026, 7, 1), max_fetch=2)
-    assert len(scans) <= 2
+    # After deduplication 2 symbols → at most 2 distinct tickers
+    assert len({s.ticker for s in scans}) <= 2
 
 
 def test_scan_universe_reraises_unexpected():

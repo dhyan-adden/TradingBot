@@ -53,9 +53,10 @@ def test_correct_hash_allows():
 
 
 def test_auto_mode_skips_human_approval():
-    assert requires_live_human_approval(_SETTINGS) is True
-    auto = dataclasses.replace(_SETTINGS, approval_mode="auto")
-    assert requires_live_human_approval(auto) is False
+    # Default settings are now auto mode; human_in_loop must still engage the gate.
+    assert requires_live_human_approval(_SETTINGS) is False
+    human = dataclasses.replace(_SETTINGS, approval_mode="human_in_loop")
+    assert requires_live_human_approval(human) is True
 
 
 def test_live_human_approval_required_blocks_route(monkeypatch, tmp_path):

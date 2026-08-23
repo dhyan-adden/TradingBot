@@ -176,6 +176,60 @@ def _holdings_actions(run_dir: Path, mode: str, root: Path) -> tuple[list[Order]
     return orders, stop_updates
 
 
+def _conviction_gate(run_dir: Path, orders: list, min_conviction: float) -> str | None:
+    """Return a block reason string if any BUY order has conviction below threshold.
+    Returns None when the gate passes (route is allowed). The trade plan is the
+    conviction source because it carries per-ticket scores the PM stage flattens
+    out. No plan file means no conviction data (intraday/postclose never write a
+    trade plan); the gate passes so holdings-management cycles are never blocked."""
+    plan_path = run_dir / "30_trade_plan.json"
+    if not plan_path.exists():
+        return None
+    try:
+        plan = TradePlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None  # malformed plan; route gate handles it
+    buy_tickers = {str(o.ticker).strip().upper() for o in orders
+                  if str(o.side).strip().upper() == "BUY"}
+    if not buy_tickers:
+        return None  # no BUY orders; gate does not apply
+    conviction_map = {t.ticker.strip().upper(): t.conviction for t in plan.tickets}
+    low = [(tk, conviction_map.get(tk, 0.0)) for tk in sorted(buy_tickers)
+           if conviction_map.get(tk, 0.0) < min_conviction]
+    if low:
+        detail = " ".join(f"{t}={c:.1f}" for t, c in low)
+        return f"conviction_below_threshold min={min_conviction} [{detail}]"
+    return None
+
+
+def _write_fills_summary(run_dir: Path, *, success: bool, n_orders: int,
+                         reason: str = "") -> None:
+    """Write a human-readable auto-route summary to fills_summary.md. This is
+    the primary notification artifact for automated cycles (no human reviewer)."""
+    lines = [
+        "# Auto-Route Summary",
+        "",
+        f"run_dir: {run_dir.name}",
+        f"timestamp: {_now_iso()}",
+        f"orders_proposed: {n_orders}",
+        f"result: {'ROUTED' if success else 'BLOCKED'}",
+    ]
+    if reason:
+        lines.append(f"block_reason: {reason}")
+    fills_path = run_dir / "fills.json"
+    if success and fills_path.exists():
+        try:
+            fills = json.loads(fills_path.read_text(encoding="utf-8"))
+            if isinstance(fills, list):
+                filled = sum(1 for f in fills if f.get("status") == "FILLED")
+                rejected = sum(1 for f in fills if f.get("status") == "RISK_REJECTED")
+                lines += [f"fills_filled: {filled}", f"fills_risk_rejected: {rejected}"]
+        except Exception:
+            pass
+    (run_dir / "fills_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+
 def _stage_done(run_dir: Path, name: str) -> bool:
     """Resume guard: a stage whose validated .json artifact already exists is
     not re-run, so completing an interrupted run never re-pays for finished
@@ -308,6 +362,23 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
             json.dumps(stop_updates, indent=2), encoding="utf-8")
     else:  # research-only adhoc: no PM stage ran, so there is nothing to route
         orders, held = [], []
+
+    # Slot-priority sort: shorter-horizon strategies are processed first by route_orders_file.
+    # When all 4 slots fill, the last orders in the list are the ones rejected - this
+    # ensures a 5-day results_momentum claim takes a slot over a 20-day sector leader,
+    # maximising slot turnover and the number of trades the system can complete.
+    _HORIZON: dict[str, int] = {
+        "results_momentum":       5,
+        "20d_breakout":           10,
+        "post_earnings_drift":    15,
+        "ema20_pullback":         20,
+        "sector_rotation_leader": 20,
+    }
+    orders = sorted(
+        orders,
+        key=lambda o: _HORIZON.get(str(o.strategy_family or "").lower(), 15)
+    )
+
     orders_file = {
         "mode": mode,
         "live_orders_enabled": False,      # paper default; live only past promotion gate
@@ -374,6 +445,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         print("tradeloop_cycle=SKIP reason=no_holdings")
         return 0
 
+    _pending_auto_route: Path | None = None  # set inside the lock if auto-routing
     with _global_lock(root) as acquired:
         if not acquired:
             print("tradeloop_cycle=LOCKED")
@@ -447,8 +519,30 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
                 print(f"tradeloop_cycle=QUALITY_BLOCKED run_dir={run_dir}")
                 return 1
 
-        print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
-        return 0
+        if settings.approval_mode != "auto":
+            print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
+            return 0
+
+        # Auto mode: check per-ticket conviction before releasing the lock.
+        # Holdings-management modes (intraday/postclose) have no trade plan, so the
+        # gate is a no-op for them. Only premarket/adhoc BUY entries are checked.
+        block = _conviction_gate(run_dir, orders, settings.auto_route_min_conviction)
+        if block:
+            _write_fills_summary(run_dir, success=False, n_orders=n_orders, reason=block)
+            print(f"tradeloop_cycle=CONVICTION_BLOCKED reason={block} run_dir={run_dir}")
+            return 1
+
+        print(f"tradeloop_cycle=AUTO_ROUTING mode={mode} orders={n_orders} run_dir={run_dir}")
+        _pending_auto_route = run_dir
+
+    # Global lock released above. route_cycle re-acquires it independently so
+    # there is no self-deadlock; the ALREADY_ROUTED guard in route_cycle prevents
+    # a double-fill if the process is somehow re-entered between the two calls.
+    if _pending_auto_route is not None:
+        rc = route_cycle(_pending_auto_route, root=root)
+        _write_fills_summary(_pending_auto_route, success=(rc == 0), n_orders=n_orders)
+        return rc
+    return 0
 
 
 def _now_iso() -> str:

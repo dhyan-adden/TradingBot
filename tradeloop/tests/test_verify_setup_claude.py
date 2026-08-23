@@ -23,6 +23,8 @@ def test_claude_authenticated_false_on_timeout(monkeypatch):
 
 
 def test_verify_blocks_claude_backend_when_unauthenticated(monkeypatch, capsys):
+    from datetime import date
+    monkeypatch.setattr(verify_setup, "date", type("date", (), {"today": staticmethod(lambda: date(2026, 7, 1))}))
     monkeypatch.setattr(verify_setup, "claude_authenticated", lambda *a, **k: False)
     rc = verify_setup.verify("premarket", backend="claude")
     assert rc == 4
@@ -30,6 +32,8 @@ def test_verify_blocks_claude_backend_when_unauthenticated(monkeypatch, capsys):
 
 
 def test_verify_ignores_claude_auth_for_openrouter(monkeypatch, capsys):
+    from datetime import date
+    monkeypatch.setattr(verify_setup, "date", type("date", (), {"today": staticmethod(lambda: date(2026, 7, 1))}))
     monkeypatch.setattr(verify_setup, "claude_authenticated", lambda *a, **k: False)
     rc = verify_setup.verify("premarket", backend="openrouter")
     assert rc == 0

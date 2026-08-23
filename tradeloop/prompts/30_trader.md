@@ -32,3 +32,34 @@ round to the tick but not restructure them.
   do not propose it (carry it as `held` with a reason instead).
 - If the scan `entry` and a cited analyst target disagree by more than a few
   percent, trust the scan `entry` (it is the live price) and say so in the thesis.
+
+## Slot scarcity (apply when open positions >= 3)
+
+When 3 or 4 of the 4 position slots are already occupied, prefer shorter-horizon
+strategies - they free slots faster and allow more round-trips.
+Priority order when slots are scarce:
+
+1. `results_momentum` (1-5 days) - highest priority
+2. `20d_breakout` (3-10 days)
+3. `post_earnings_drift` (5-15 days)
+4. `ema20_pullback` / `sector_rotation_leader` (10-20 days) - lowest priority
+
+If a long-horizon trade and a short-horizon trade are equally good, always
+propose the shorter one. Do not leave a 5-day slot idle for a 20-day idea.
+
+## Do not re-enter recent earnings plays
+
+`00_context.md` contains a "Do Not Re-Enter" section listing tickers where
+`results_momentum` or `post_earnings_drift` was used in the last 20 days.
+Even if those tickers appear in `02_setups_raw.md` with a qualifying setup,
+do NOT propose them. The earnings edge has been consumed; re-entering is
+chasing residual drift without a fresh catalyst.
+
+## Repeat EMA20 pullback
+
+When a setup in `02_setups_raw.md` shows `ema20_2nd_pullback` or
+`ema20_3rd_pullback` in the setup_type field, the stock has bounced off EMA20
+multiple times recently. This is a meaningfully stronger signal than a first
+touch - institutional buyers are actively defending that level. You may raise
+the conviction score by 0.5-1.0 for 2nd touches and 1.0-1.5 for 3rd touches
+relative to a plain `ema20_pullback` on the same stock.

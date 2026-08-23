@@ -43,11 +43,29 @@ def _latest_run(runs_dir: Path) -> dict | None:
 
     approval = "not_required"
     if proposed_orders:
-        try:
-            approval_status = validate_approval(run_dir, run_dir / "orders.json")
-            approval = "approved" if approval_status.ok else "missing_or_invalid"
-        except (OSError, ValueError):
-            approval = "missing_or_invalid"
+        # Auto-routed runs never write approval.json - check fills first.
+        # An empty [] fills.json is the prepare-cycle placeholder (not a real route);
+        # only a non-empty list means route_cycle actually ran.
+        fills = _load_json(run_dir / "fills.json")
+        if isinstance(fills, list) and fills:
+            # route_cycle ran (auto mode); any non-empty fills = auto_routed
+            approval = "auto_routed"
+        else:
+            # No real fills yet - check if conviction gate blocked it
+            summary_path = run_dir / "fills_summary.md"
+            if summary_path.exists():
+                try:
+                    if "result: BLOCKED" in summary_path.read_text(encoding="utf-8"):
+                        approval = "conviction_blocked"
+                except OSError:
+                    pass
+            if approval == "not_required":
+                # Human-in-loop path: look for a human approval artifact
+                try:
+                    approval_status = validate_approval(run_dir, run_dir / "orders.json")
+                    approval = "approved" if approval_status.ok else "missing_or_invalid"
+                except (OSError, ValueError):
+                    approval = "missing_or_invalid"
 
     controls_status = "missing"
     if isinstance(controls, dict):

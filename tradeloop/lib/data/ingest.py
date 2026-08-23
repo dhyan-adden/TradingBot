@@ -106,7 +106,8 @@ def run(as_of: datetime, symbols: "list[str] | None" = None, max_fetch: int = 25
             symbols = master.symbols()
         setups = scan_universe(symbols[:max_fetch], kite_client, as_of.date(),
                                max_fetch=max_fetch, min_turnover_inr=min_turnover,
-                               pace_seconds=pace, min_stop_pct=min_stop)
+                               pace_seconds=pace, min_stop_pct=min_stop,
+                               config_dir=config_dir)
 
     # full ranked scan to disk (audit + dashboard)
     (run_dir / "full_scan.jsonl").write_text(

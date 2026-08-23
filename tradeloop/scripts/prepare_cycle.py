@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +21,28 @@ from tradeloop.lib.util.ist_clock import IST
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _recent_earnings_tickers(ledger_path: Path, lookback_days: int = 20) -> set[str]:
+    """Return tickers with a fill from an earnings strategy in the last lookback_days.
+    ISO timestamps sort lexicographically, so string comparison is safe here."""
+    if not ledger_path.exists():
+        return set()
+    try:
+        events = Ledger(ledger_path).replay([ORDER_FILLED])
+    except Exception:
+        return set()
+    _EARNINGS = {"results_momentum", "post_earnings_drift"}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    recent: set[str] = set()
+    for ev in events:
+        if str(ev.get("strategy_family", "")).lower() not in _EARNINGS:
+            continue
+        if str(ev.get("ts", "")) >= cutoff:
+            sym = str(ev.get("symbol", "")).strip().upper()
+            if sym:
+                recent.add(sym)
+    return recent
 
 
 def _portfolio_state(base: Path) -> PortfolioState:
@@ -58,6 +80,23 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
     context = render_context(state, mode, macro)
     if carry_forward.strip():
         context = "\n".join([context.rstrip(), "", "## Carry Forward Context", "", carry_forward.strip(), ""])
+    # Recent earnings plays: tickers where results_momentum or post_earnings_drift
+    # was used in the last 20 days.  The trader stage must not re-enter these;
+    # the original earnings edge has been consumed.
+    recent_earnings = _recent_earnings_tickers(base / "state" / "ledger.db")
+    if recent_earnings:
+        context = "\n".join([
+            context.rstrip(), "",
+            "## Do Not Re-Enter (recent earnings play ≤ 20 days)",
+            "",
+            "The following tickers had a results_momentum or post_earnings_drift fill "
+            "within the last 20 days. Do NOT propose them as new entries - the earnings "
+            "edge has already been consumed. They may still appear as technical setups "
+            "in 02_setups_raw.md but must be skipped.",
+            "",
+            *[f"- {t}" for t in sorted(recent_earnings)],
+            "",
+        ])
     (run_dir / "00_context.md").write_text(context, encoding="utf-8")
     if mode == "adhoc":
         request_text = request.strip()

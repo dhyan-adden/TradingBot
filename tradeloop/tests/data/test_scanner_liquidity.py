@@ -27,14 +27,14 @@ class FakeKite:
 def test_liquidity_floor_drops_thin_symbol():
     # turnover = close(~50) * volume(100) ~= 5,000 << 1,000,000 floor -> dropped
     kite = FakeKite({"THIN": _candles(50.0, 100)})
-    assert scan_symbol("THIN", kite, date(2026, 2, 2), min_turnover_inr=1_000_000) is None
+    assert scan_symbol("THIN", kite, date(2026, 2, 2), min_turnover_inr=1_000_000) == []
 
 
 def test_liquidity_floor_keeps_liquid_symbol():
     # turnover = close(~50) * volume(1,000,000) ~= 50M >> floor -> setup allowed
     kite = FakeKite({"LIQ": _candles(50.0, 1_000_000)})
-    scan = scan_symbol("LIQ", kite, date(2026, 2, 2), min_turnover_inr=1_000_000)
-    assert scan is not None and scan.ticker == "LIQ"
+    scans = scan_symbol("LIQ", kite, date(2026, 2, 2), min_turnover_inr=1_000_000)
+    assert scans and scans[0].ticker == "LIQ"
 
 
 def test_min_stop_floor_drops_near_zero_volatility_setup():
@@ -43,14 +43,14 @@ def test_min_stop_floor_drops_near_zero_volatility_setup():
                    high=100.0 + i * 0.01 + 0.02, low=100.0 + i * 0.01 - 0.02,
                    close=100.0 + i * 0.01, volume=1_000_000) for i in range(60)]
     kite = FakeKite({"CASHETF": flat})
-    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.01) is None
+    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.01) == []
     # same series with the floor off still yields a setup (proves the floor is the cause)
-    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.0) is not None
+    assert scan_symbol("CASHETF", kite, date(2026, 2, 2), min_stop_pct=0.0) != []
 
 
 def test_min_stop_floor_keeps_real_volatility_setup():
     kite = FakeKite({"REAL": _candles(50.0, 1_000_000)})  # ~0.5/step moves -> real ATR
-    assert scan_symbol("REAL", kite, date(2026, 2, 2), min_stop_pct=0.01) is not None
+    assert scan_symbol("REAL", kite, date(2026, 2, 2), min_stop_pct=0.01) != []
 
 
 def test_scan_universe_paces_each_symbol():

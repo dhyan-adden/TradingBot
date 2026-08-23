@@ -152,7 +152,7 @@ def test_uncited_news_candidates_warns_but_never_blocks(monkeypatch, tmp_path, c
     assert rc == 0                                   # heuristic: warn, never block
     assert "tradeloop_warning=UNCITED_NEWS_CANDIDATES" in out
     assert "SBIN" in out
-    assert "tradeloop_cycle=AWAITING_APPROVAL" in out
+    assert "tradeloop_cycle=AUTO_ROUTING" in out  # default is now auto mode
 
 
 def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
@@ -179,20 +179,17 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     rc = orchestrator.run_cycle("premarket", root=root)
     assert rc == 0
 
-    # Split cycle: propose phase must STOP at orders.json - nothing routed,
-    # nothing filled, book untouched, until route_cycle approves it.
+    # Auto mode: run_cycle routes immediately, fills.json exists after the call.
     run_dir = root / "runs" / "e2e_premarket"
-    assert not (run_dir / "fills.json").exists()
-    assert not (root / "state" / "ledger.db").exists()
-
-    rc = orchestrator.route_cycle(run_dir, root=root)
-    assert rc == 0
     fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
     statuses = {f.get("status") for f in fills}
     assert "FILLED" in statuses            # approved order routed
     assert "RISK_REJECTED" in statuses     # non-universe order gated
     decisions = (run_dir / "decisions.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(decisions) == 2             # gate logged its own verdict per order
+
+    # fills_summary.md must be written as the notification artifact.
+    assert (run_dir / "fills_summary.md").exists()
 
     # Persistence: the FILLED fill (and its hard_stop) reached the ledger, so the
     # NEXT cycle's hydrate sees the position — spec acceptance #3.
@@ -208,7 +205,7 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     assert fill_events[0]["target_1"] == 1100.0
     assert fill_events[0]["strategy_family"] == "20d_breakout"
 
-    # Approving the same run twice must refuse - double-routing doubles positions.
+    # Double-routing is still prevented (auto-route already fired).
     rc = orchestrator.route_cycle(run_dir, root=root)
     assert rc == 1
     fill_events = Ledger(book_path).replay(["paper.order.filled"])

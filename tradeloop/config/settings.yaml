@@ -56,8 +56,9 @@ trading:
   zerodha_enable_trading: false
 
 execution:
-  approval_mode: human_in_loop
-  allow_auto_live: false
+  approval_mode: auto
+  allow_auto_live: true
+  auto_route_min_conviction: 6.5
   live_canary:
     enabled: true
     max_quantity: 1
