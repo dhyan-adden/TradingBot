@@ -1,110 +1,701 @@
 # TradeLoop
 
-Agent-driven, India-only, news-discovery-first paper trading loop for cash equities.
+### A Multi-Agent Decision Framework for Evidence-Driven Trading
 
-The current operational target is a safe, propose-only paper loop using live market data.
-Live promotion is intentionally not achieved until the ledger contains the configured closed-paper-trade history and all audit gates pass.
+TradeLoop explores a broader question than algorithmic trading:
 
-Python does the deterministic work (data fetch, ticker extraction, indicators, sizing, cost model, portfolio state, broker payloads, hash-chained ledger, markdown memory).
-An LLM reasoning DAG does the judgment through file boundaries.
-Every order passes two deterministic gates before it can fill: the risk gate (`evaluate()`) and the cycle-mode gate (postclose never trades, intraday exits only).
+> **How do you make multiple AI agents reason together on a high-stakes decision without giving any single LLM uncontrolled authority?**
 
-## Layout
+The system models an **AI investment committee**.
 
-```
-tradeloop/            the system
-  orchestrator.py     desk manager: gates -> lock -> prepare -> reason -> propose -> route
-  prompts/            00_master + 13 role prompts (news -> ... -> PM, post-trade)
-  lib/
-    llm/              OpenRouter reasoning DAG (client, routing, schemas, stages)
-    data/             ingest + sources/ + snapshot + evidence/grounding gates + Kite client
-    ta/               scanner + indicators (full-NSE universe)
-    broker/           router (risk + mode gates), paper_broker, orders_schema
-    risk/             evaluate() gate, sizing, circuit_breaker (kill switch)
-    audit/            hash-chained ledger, reconcile, controls, attribution, postclose learning
-    portfolio/  memory/  util/
-  dashboard/          stdlib read-only web UI (:8765) - portfolio + run cards
-  scripts/            prepare_cycle, verify_setup, cron_dispatch, run_cycle.sh
-  config/             settings, universe, indicators, news_sources, strategy_families
-  state/              ledger.db (hash-chained) + orchestrator.lock
-  memory/             journal, lessons, dossiers, strategy_performance (promotion gate)
-  runs/               archived cycle directories (audit trail)
+Different agents specialize in news, sentiment, fundamentals, technical analysis, opposing research, risk, and portfolio management. They communicate through structured artifacts and progressively transform raw market information into a final decision.
 
-src/mcp/zerodha.ts    Zerodha Kite MCP - the one broker integration (prices, instruments, historical)
-scripts/              zerodha-auth.ts, env-status.ts (daily token + env check)
-bin/codex-zerodha     launcher that injects the project-only Kite MCP
-docs/                 architecture, handoffs, research notes
-legacy/               archived engine-1 (LangGraph paper harness) - reference only, not run
+The LLMs **reason**.
+
+Deterministic Python **controls**.
+
+`Python` · `Multi-Agent Systems` · `Pydantic` · `LLMs` · `Zerodha` · `OpenRouter` · `Claude` · `OpenCode`
+
+---
+
+# The Core Idea
+
+A single-agent trading system might look like:
+
+```text id="eg21ul"
+Market Data
+     │
+     ▼
+    LLM
+     │
+     ▼
+ "Buy XYZ"
 ```
 
-## Setup
+That concentrates research, reasoning, risk and execution inside one opaque model call.
 
-Python runs in the conda env named `tradingbot` (Python 3.11):
+TradeLoop instead separates responsibility.
 
-```bash
+```text id="rj6hkl"
+                    AI INVESTMENT COMMITTEE
+
+Market Evidence
+      │
+      ▼
+┌─────────────────┐
+│ Research Agents │
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ Bull vs Bear    │
+│    Debate       │
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ Trader / Planner│
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  Risk Manager   │
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ Portfolio Mgr   │
+└────────┬────────┘
+         ▼
+   Proposed Decision
+         │
+         ▼
+ Deterministic Gates
+         │
+         ▼
+   Human Approval
+         │
+         ▼
+    Paper Broker
+```
+
+No research agent can place an order.
+
+No debate agent controls risk.
+
+No LLM decides position sizing.
+
+Each component has one responsibility.
+
+---
+
+# Multi-Agent Architecture
+
+```mermaid id="m1emtr"
+flowchart TD
+
+    DATA[Market Data + News]
+
+    DATA --> NEWS[News Analyst]
+    NEWS --> SENT[Sentiment Analyst]
+    NEWS --> FUND[Fundamental Analyst]
+    DATA --> TECH[Technical Analyst]
+
+    SENT --> SHORT[Shortlisting Agent]
+    FUND --> SHORT
+    TECH --> SHORT
+
+    SHORT --> BULL[Bull Researcher]
+    SHORT --> BEAR[Bear Researcher]
+
+    BULL --> DEBATE[Debate Moderator]
+    BEAR --> DEBATE
+
+    DEBATE --> TRADER[Trade Planner]
+    TECH --> TRADER
+
+    TRADER --> RISK[Risk Manager]
+    RISK --> PM[Portfolio Manager]
+
+    PM --> GATES[Deterministic Python Gates]
+    GATES --> APPROVAL[Human / Policy Approval]
+    APPROVAL --> BROKER[Paper Broker]
+
+    BROKER --> MEMORY[Ledger + Memory]
+```
+
+---
+
+# Agent Roles
+
+The system uses specialized prompts rather than one general-purpose agent.
+
+```text id="1vaalz"
+01  News Analyst
+       ↓
+02  Sentiment Analyst
+       ↓
+03  Fundamental Analyst
+       ↓
+04  Technical Analyst
+       ↓
+05  Shortlisting Agent
+       ↓
+ ┌───────────────┐
+ │               │
+ ▼               ▼
+Bull Agent     Bear Agent
+ │               │
+ └───────┬───────┘
+         ▼
+  Debate Moderator
+         ↓
+    Trade Planner
+         ↓
+    Risk Manager
+         ↓
+ Portfolio Manager
+```
+
+Additional agents handle:
+
+* existing holdings;
+* ad-hoc research requests;
+* post-trade analysis and learning.
+
+Not every role runs during every cycle.
+
+The graph changes depending on the task.
+
+---
+
+# Agents Communicate Through Artifacts
+
+Agents do not share a giant conversation history.
+
+Each stage receives only explicitly defined upstream artifacts.
+
+```text id="n5jxvr"
+News Agent
+   │
+   └──► 10_news.json
+            │
+            ▼
+     Sentiment Agent
+            │
+            └──► 11_sentiment.json
+                     │
+                     ▼
+              Shortlisting Agent
+                     │
+                     └──► 14_shortlist.json
+                              │
+                     ┌────────┴────────┐
+                     ▼                 ▼
+                 Bull Agent        Bear Agent
+                     │                 │
+                     └────────┬────────┘
+                              ▼
+                         Debate Agent
+```
+
+This creates explicit **agent contracts**.
+
+Every handoff is inspectable.
+
+---
+
+# Structured Agent Outputs
+
+Each agent must produce output matching a predefined **Pydantic schema**.
+
+```text id="bf8e6j"
+Agent
+  │
+  ▼
+LLM Response
+  │
+  ▼
+Schema Validation
+  │
+  ├── Invalid ──► Retry
+  │
+  ▼
+Validated Artifact
+  │
+  ├── JSON
+  └── Markdown
+```
+
+A stage cannot silently return arbitrary prose and continue through the system.
+
+Invalid output fails the stage instead of becoming a trading decision.
+
+---
+
+# Bull vs Bear: Deliberate Disagreement
+
+One of the central design choices is to **manufacture disagreement**.
+
+Instead of asking one model:
+
+> “Should I buy this?”
+
+TradeLoop asks different agents to defend opposing interpretations.
+
+```text id="q5l6p5"
+             Candidate
+
+          ┌──────┴──────┐
+          ▼             ▼
+      Bull Agent     Bear Agent
+
+     "Why this       "Why this
+      works"          fails"
+
+          │             │
+          └──────┬──────┘
+                 ▼
+          Debate Moderator
+                 │
+                 ▼
+           Balanced Thesis
+```
+
+The trade planner sees the debate rather than only the strongest bullish argument.
+
+This makes **adversarial reasoning part of the architecture**.
+
+---
+
+# LLM Reasoning vs Deterministic Control
+
+TradeLoop deliberately separates judgment from authority.
+
+```text id="xtkmpg"
+           LLM DOMAIN
+
+News interpretation
+Sentiment
+Fundamentals
+Technical reasoning
+Bull thesis
+Bear thesis
+Debate
+Trade thesis
+Risk assessment
+Portfolio judgment
+
+                │
+                ▼
+
+        DETERMINISTIC BOUNDARY
+
+Position sizing
+Order schemas
+Risk limits
+Price grounding
+Evidence validation
+Cycle policy
+Kill switch
+Order routing
+Ledger
+```
+
+The model may recommend a position.
+
+It cannot decide the final quantity arbitrarily.
+
+Python computes sizing deterministically after the trade-plan stage.
+
+---
+
+# Safety Architecture
+
+A proposed order travels through several boundaries before it can reach even the paper broker.
+
+```mermaid id="1lbopa"
+flowchart LR
+
+    PM[Portfolio Manager]
+      --> O[Structured Order]
+
+    O --> E[Evidence Gate]
+    E --> P[Price Grounding]
+    P --> Q[Quality Gate]
+    Q --> R[Risk Engine]
+    R --> M[Mode Policy]
+    M --> H[Approval]
+    H --> B[Paper Broker]
+```
+
+Possible outcomes:
+
+```text id="twlfit"
+Proposed Order
+     │
+     ├── Missing evidence ──────► BLOCK
+     ├── Invented price ────────► BLOCK
+     ├── Poor analysis quality ─► BLOCK
+     ├── Risk violation ────────► BLOCK
+     ├── Wrong cycle mode ──────► BLOCK
+     │
+     └── Valid
+           ↓
+      Await Approval
+```
+
+**LLM confidence alone is never sufficient authorization.**
+
+---
+
+# Evidence Grounding
+
+Agents cannot freely invent supporting evidence.
+
+The system maintains canonical evidence identifiers from the frozen market/news snapshot.
+
+```text id="euhluf"
+Market Snapshot
+     │
+     ├── evidence_001
+     ├── evidence_002
+     └── evidence_003
+             │
+             ▼
+         Agent Claim
+             │
+             ▼
+     Evidence Validation
+```
+
+Evidence references are canonicalized and validated before the proposal is accepted.
+
+Trade entry and stop prices are also checked against frozen scanner levels.
+
+---
+
+# Resumable Multi-Agent Execution
+
+Multi-agent workflows can be expensive.
+
+A failure at agent #9 should not require rerunning agents #1–8.
+
+TradeLoop persists every validated stage.
+
+```text id="uo0u9w"
+Agent 1 ✓
+Agent 2 ✓
+Agent 3 ✓
+Agent 4 ✓
+Agent 5 ✕
+
+      process interrupted
+
+          ↓ RESUME
+
+Agent 1 ─ skip
+Agent 2 ─ skip
+Agent 3 ─ skip
+Agent 4 ─ skip
+Agent 5 ─ retry
+```
+
+Validated artifacts become checkpoints.
+
+This makes the orchestration:
+
+* resumable;
+* auditable;
+* cheaper to recover;
+* easier to debug.
+
+---
+
+# Multiple LLM Backends, One Agent Graph
+
+The reasoning graph is model-provider independent.
+
+```text id="4qq6gj"
+                Agent DAG
+                   │
+        ┌──────────┼───────────┐
+        ▼          ▼           ▼
+     Claude     OpenCode    OpenRouter
+        │          │           │
+        └──────────┼───────────┘
+                   ▼
+          Same Structured Outputs
+                   │
+                   ▼
+           Same Risk Controls
+```
+
+Changing the LLM backend does not change the execution policy.
+
+The same schemas and deterministic gates remain authoritative.
+
+---
+
+# Cycle-Aware Agent Graphs
+
+TradeLoop does not run every agent indiscriminately.
+
+The graph adapts to the task.
+
+```mermaid id="nvbe70"
+flowchart LR
+
+    MODE{Cycle}
+
+    MODE -->|Premarket| FULL[Full Research + New Ideas]
+    MODE -->|Intraday| HOLD[Holdings Review]
+    MODE -->|Post-Close| LEARN[Review + Learning]
+    MODE -->|Ad-hoc| ROUTE[Request-Specific Agent Path]
+```
+
+### Premarket
+
+```text id="7e9fm9"
+Research
+  ↓
+Debate
+  ↓
+Plan
+  ↓
+Risk
+  ↓
+Portfolio Decision
+```
+
+### Intraday
+
+```text id="rsn4ys"
+Existing Positions
+       ↓
+Holdings Review
+       ↓
+Hold / Trim / Exit / Tighten Stop
+```
+
+### Post-close
+
+```text id="xek1td"
+Completed Activity
+       ↓
+Attribution
+       ↓
+Post-Trade Analysis
+       ↓
+Memory
+```
+
+### Ad-hoc
+
+An intake agent determines which stages are actually necessary.
+
+```text id="626vej"
+User Request
+     ↓
+Intake Agent
+     ↓
+Required Stages Only
+```
+
+---
+
+# Memory and Learning
+
+Agent decisions should not disappear after one execution.
+
+```text id="4u8c55"
+Today's Decision
+      │
+      ▼
+Paper Execution
+      │
+      ▼
+Audit Ledger
+      │
+      ▼
+Post-Trade Review
+      │
+      ▼
+Memory
+      │
+      ▼
+Future Context
+```
+
+The system maintains:
+
+```text id="d8e0rw"
+memory/
+├── journal
+├── lessons
+├── company dossiers
+├── strategy performance
+└── carry-forward context
+```
+
+Past holdings analysis can therefore become structured context for a future cycle.
+
+---
+
+# Auditability
+
+Every run creates its own artifact directory.
+
+```text id="8ktuhm"
+runs/<cycle>/
+│
+├── market snapshot
+├── raw news
+├── technical setups
+│
+├── 10_news.json
+├── 11_sentiment.json
+├── 12_fundamentals.json
+├── 13_technical.json
+├── 14_shortlist.json
+│
+├── 20_bull.json
+├── 21_bear.json
+├── 22_debate.json
+│
+├── 30_trade_plan.json
+├── 40_risk_report.json
+├── 41_pm_decision.json
+│
+├── orders.json
+├── fills.json
+└── audit artifacts
+```
+
+A final decision can therefore be traced backwards through the reasoning chain.
+
+```text id="10wo5t"
+Order
+  ↑
+Portfolio Decision
+  ↑
+Risk Report
+  ↑
+Trade Plan
+  ↑
+Debate
+  ↑
+Bull + Bear Research
+  ↑
+Shortlist
+  ↑
+Fundamentals + Technicals + Sentiment
+  ↑
+Market Evidence
+```
+
+---
+
+# Running TradeLoop
+
+Install the Python package:
+
+```bash id="yq0c65"
 conda activate tradingbot
 python -m pip install -e ".[dev]"
 ```
 
-Node is only needed for the Zerodha MCP and the daily auth helper:
+Configure the Zerodha integration:
 
-```bash
+```bash id="279ci4"
 npm install
-cp .env.example .env    # then fill it
-```
-
-## Daily token
-
-Zerodha access tokens expire daily and a new login invalidates the previous one.
-Refresh before a live-data cycle, then verify with a real price call (the instruments endpoint is lenient on stale tokens):
-
-```bash
+cp .env.example .env
 npm run auth:zerodha -- --listen
 ```
 
-## Run a cycle
+Run a complete multi-agent premarket cycle:
 
-Cycles are propose-only: they stop at `AWAITING_APPROVAL` and never route until you approve.
-
-```bash
-# propose (live market data on; paper routing)
-ZERODHA_ENABLE_DATA=true python -m tradeloop.orchestrator premarket
-
-# approve + route a proposed run (this invocation IS the approval)
-python -m tradeloop.orchestrator route tradeloop/runs/<timestamp>_<mode>
+```bash id="txdlrw"
+ZERODHA_ENABLE_DATA=true \
+python -m tradeloop.orchestrator premarket
 ```
 
-Cycle modes:
+The system reasons and produces a proposal, then stops:
 
-- `premarket` (08:00 IST): full pipeline; new long entries allowed.
-- `intraday` (12:30 IST): manage existing longs only; no new entries.
-- `postclose` (16:00 IST): no trading; learning and memory updates only.
-- `adhoc "<request>"`: read the request, then run the necessary path.
-
-Cron runs premarket at 08:00 IST on weekdays via `tradeloop/scripts/cron_dispatch.sh`.
-
-## Dashboard
-
-```bash
-python -m tradeloop.dashboard        # http://127.0.0.1:8765
+```text id="t8knxq"
+Agents
+   ↓
+PM Decision
+   ↓
+Orders Proposal
+   ↓
+AWAITING_APPROVAL
 ```
 
-## Non-negotiables
+Approve and route the paper proposal explicitly:
 
-- Indian cash equities only. Long-only. No shorts, no F&O, no leverage.
-- `tradeloop/kill_switch.md` halts all orders.
-- `ZERODHA_ENABLE_TRADING=false` is the default and routes to paper; live routing additionally requires the strategy-performance promotion gate.
-- Code and scripts never read `.env` or print secret-like values.
+```bash id="l9ojup"
+python -m tradeloop.orchestrator route \
+  tradeloop/runs/<timestamp>_premarket
+```
 
-## Current Readiness
+---
 
-- Implemented scanner families: `breakout_20d_pullback` and `ema_trend_pullback`.
-- Planned scanner families: post-earnings drift, results-day momentum, and sector-rotation leader.
-- The long-term validation-lab and hybrid-fund vision in `tradeloop/docs/vision.md` remains roadmap work.
-- Run `python tradeloop/scripts/verify_setup.py --health` before a data-backed cycle.
+# Dashboard
 
-## Legacy engine-1
+The reasoning and portfolio state can also be inspected through the local dashboard.
 
-`legacy/` holds the original LangGraph paper harness (`tradingbot` package plus its own tests, config, state, and memory).
-It is kept as reference only, is not imported by TradeLoop, and is not run.
-Its usage notes live in `legacy/README.md`.
+```bash id="j8b312"
+python -m tradeloop.dashboard
+```
+
+```text id="by6h7n"
+http://127.0.0.1:8765
+```
+
+---
+
+# Why TradeLoop Exists
+
+TradeLoop started from a problem that applies well beyond markets:
+
+> **LLMs are good at reasoning, but high-stakes systems need separation of responsibility, disagreement, validation, memory, and deterministic authority.**
+
+Trading provides a useful environment for testing those ideas because decisions have:
+
+* incomplete information;
+* competing interpretations;
+* explicit risk;
+* measurable outcomes;
+* persistent state;
+* consequences for bad reasoning.
+
+So the deeper system being explored is not merely:
+
+```text id="jdkfzb"
+AI → Trading
+```
+
+It is:
+
+```text id="tcq163"
+                  HIGH-STAKES AI
+
+Evidence
+   ↓
+Specialist Agents
+   ↓
+Structured Handoffs
+   ↓
+Adversarial Debate
+   ↓
+Decision Agent
+   ↓
+Deterministic Validation
+   ↓
+Human / Policy Approval
+   ↓
+Action
+   ↓
+Audit + Memory
+```
+
+The trading domain is the testbed.
+
+**The architecture is a reusable pattern for controlled multi-agent systems.**
