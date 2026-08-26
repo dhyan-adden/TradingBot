@@ -73,7 +73,7 @@ def test_promotion_gate_ignores_markdown(tmp_path) -> None:
 def test_execution_mode_defaults_are_safe() -> None:
     settings = load_settings(ROOT / "config" / "settings.yaml")
     assert settings.approval_mode == "auto"
-    assert settings.allow_auto_live is True
+    assert settings.allow_auto_live is False
     assert settings.auto_route_min_conviction == 6.5
     assert settings.live_canary_enabled is True
     assert settings.live_canary_max_quantity == 1

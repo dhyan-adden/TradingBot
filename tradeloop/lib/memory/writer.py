@@ -28,3 +28,8 @@ def append_trade_journal(memory_root: Path, heading: str, body: str) -> bool:
 def append_lesson(memory_root: Path, heading: str, body: str) -> bool:
     return append_unique(memory_root / "lessons_learned.md", heading, body)
 
+
+def append_manager_feedback(memory_root: Path, heading: str, body: str,
+                            run_id: str, timestamp: str) -> bool:
+    return append_provenanced(memory_root / "manager_feedback.md", heading, body,
+                              run_id=run_id, timestamp=timestamp)

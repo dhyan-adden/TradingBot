@@ -90,3 +90,23 @@ def test_holdings_review_stage_wired(tmp_path):
 def test_holdings_review_prompt_file_exists():
     from tradeloop.lib.llm.stages import PROMPTS_DIR, PROMPT_PATH
     assert (PROMPTS_DIR / f"{PROMPT_PATH['15_holdings_review']}.md").exists()
+
+
+def test_pm_stage_receives_manager_feedback_when_present(tmp_path):
+    from tradeloop.lib.llm import schemas
+
+    class FakeClient:
+        def call_json(self, role, system, user, schema, model=None):
+            assert role == "41_pm_decision"
+            assert schema is schemas.PMDecision
+            assert "manager_feedback.md" in user
+            assert "prior accepted order" in user
+            return schemas.PMDecision(orders=[], held=[], evidence=[])
+
+    (tmp_path / "40_risk_report.md").write_text("# risk\n", encoding="utf-8")
+    (tmp_path / "30_trade_plan.md").write_text("# plan\n", encoding="utf-8")
+    (tmp_path / "03_market_regime.md").write_text("# regime\n", encoding="utf-8")
+    (tmp_path / "manager_feedback.md").write_text(
+        "# Manager Feedback\n\n## prior\n\nprior accepted order\n", encoding="utf-8")
+    out = stages.run_stage("41_pm_decision", tmp_path, FakeClient())
+    assert out.orders == []

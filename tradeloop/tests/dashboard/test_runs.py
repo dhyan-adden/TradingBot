@@ -121,6 +121,24 @@ def test_read_run_handles_codex_list_orders_json(tmp_path):
     assert "Proposing to SELL 11" in runs[0].decision
 
 
+def test_conviction_blocked_run_overrides_empty_fills_placeholder(tmp_path):
+    d = _make_run(tmp_path, "2026-08-24_0918_premarket", True)
+    (d / "orders.json").write_text(json.dumps({
+        "orders": [{"ticker": "LTFOODS", "side": "BUY", "quantity": 51, "price": 466.5}],
+        "held": [],
+    }))
+    (d / "fills.json").write_text(json.dumps([]))
+    (d / "fills_summary.md").write_text(
+        "# Auto-Route Summary\n\nresult: BLOCKED\n"
+        "block_reason: conviction_below_threshold min=6.5 [LTFOODS=6.0]\n",
+        encoding="utf-8",
+    )
+    out = read_run(d)
+    assert "Blocked by conviction gate" in out["decision"]["summary"]
+    runs = list_runs(tmp_path)
+    assert "Blocked by conviction gate" in runs[0].decision
+
+
 def test_read_run_renders_codex_markdown_stage(tmp_path):
     d = _make_run(tmp_path, "2026-08-19_1610_premarket", False)
     (d / "10_news.json").unlink()

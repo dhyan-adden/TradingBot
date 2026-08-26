@@ -11,7 +11,7 @@ RUNS_DIR = ROOT / "runs"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
-def main(port: int = 8765) -> None:
+def main(port: int = 8770) -> None:
     handler = make_handler(RUNS_DIR, STATIC_DIR)
     server = HTTPServer(("127.0.0.1", port), handler)
     url = f"http://127.0.0.1:{port}/"

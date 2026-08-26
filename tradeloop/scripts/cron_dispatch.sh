@@ -26,9 +26,9 @@ record_alert() {
 
 case "$MODE" in
   premarket)
-    # Proven propose path (in-process Claude DAG, on the subscription). Propose-only:
-    # stops at AWAITING_APPROVAL; a human reviews (/review-trade) and routes. Live Kite
-    # scan is best-effort - a stale token degrades to an empty scan, not a crash.
+    # Proven autonomous paper path (in-process Claude DAG, on the subscription).
+    # In approval_mode=auto, paper orders route after deterministic gates pass.
+    # Live routing remains locked unless explicitly enabled in settings and env.
     cd "$PROJECT_ROOT"
     # Headless Kite auth: the ONE daily token refresh. The token stays valid for
     # the whole trading day, so intraday/postclose reuse it - no re-auth there.
@@ -50,9 +50,9 @@ case "$MODE" in
     exec env ZERODHA_ENABLE_DATA=true "$PY" -m tradeloop.orchestrator premarket --backend claude
     ;;
   intraday)
-    # Intraday pulse (14:00 IST): holdings health only - can propose exits and
-    # stop-tightens, still stops at AWAITING_APPROVAL. Late-session slot so an
-    # approved exit has a full hour to route before the 15:30 close.
+    # Intraday pulse (14:00 IST): holdings health only - can auto-route paper exits,
+    # stop-tightens, and held-position top-ups that pass deterministic gates.
+    # Late-session slot leaves a full hour before the 15:30 close.
     cd "$PROJECT_ROOT"
     # No auth refresh here - premarket's daily token is still valid this session.
     if "$PY" tradeloop/scripts/verify_setup.py --mode intraday --backend claude; then

@@ -45,7 +45,7 @@ STAGE_INPUTS: dict[str, list[str]] = {
                        "00_context.md", "analysis_quality.jsonl"],
     "40_risk_report": ["30_trade_plan.md", "03_market_regime.md", "00_context.md", "analysis_quality.jsonl"],
     "41_pm_decision": ["40_risk_report.md", "30_trade_plan.md", "03_market_regime.md",
-                       "analysis_quality.jsonl"],
+                        "analysis_quality.jsonl", "manager_feedback.md"],
     "50_post_trade": ["fills.json"],
 }
 

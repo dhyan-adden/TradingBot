@@ -42,18 +42,20 @@ def test_pm_prompt_writes_orders_only_not_fills() -> None:
 
 from tradeloop import orchestrator
 from tradeloop.lib.audit.ledger import Ledger
+from tradeloop.lib.config import load_settings
+from tradeloop.lib.llm.schemas import PMDecision
 
 
 def test_run_reasoning_is_a_seam(monkeypatch, tmp_path) -> None:
     calls = {}
 
-    def fake(run_dir, mode, agent):
+    def fake(run_dir, mode, agent, timeout):
         calls["run_dir"] = run_dir
         calls["mode"] = mode
         return 0
 
     monkeypatch.setattr(orchestrator, "_run_reasoning", fake)
-    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex")
+    rc = orchestrator._run_reasoning(tmp_path, "premarket", "codex", 0)
     assert rc == 0
     assert calls["mode"] == "premarket"
 
@@ -116,6 +118,7 @@ def test_malformed_orders_aborts_loud(monkeypatch, tmp_path) -> None:
         return 0
 
     def fake_prepare(mode, request="", root=None):
+        assert root is not None
         run_dir = root / "runs" / f"test_{mode}"
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
@@ -131,6 +134,7 @@ def test_uncited_news_candidates_warns_but_never_blocks(monkeypatch, tmp_path, c
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
 
     def fake_prepare(mode, request="", root=None):
+        assert root is not None
         run_dir = root / "runs" / f"warn_{mode}"
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
@@ -160,6 +164,7 @@ def test_end_to_end_gate_runs_on_every_order(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
 
     def fake_prepare(mode, request="", root=None):
+        assert root is not None
         run_dir = root / "runs" / f"e2e_{mode}"
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
@@ -259,6 +264,216 @@ def test_route_applies_tighten_only_stop_updates(monkeypatch, tmp_path) -> None:
     assert _portfolio_state(root).hard_stops["HDFCBANK"] == 820.0
 
 
+def test_manager_backchannel_retry_uses_strongest_model_and_applies_revised_orders(tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    run_dir = root / "runs" / "2026-08-24_0918_premarket"
+    run_dir.mkdir(parents=True)
+    (run_dir / "03_market_regime.md").write_text("# Regime\nreduced-risk range bound\n", encoding="utf-8")
+    (run_dir / "30_trade_plan.json").write_text(json.dumps({
+        "evidence": [],
+        "tickets": [
+            {
+                "ticker": "LTFOODS", "side": "BUY", "product": "CNC",
+                "strategy_family": "20d_breakout", "entry": 466.5,
+                "hard_stop": 447.17, "target_1": 505.17, "target_2": 524.5,
+                "quantity": 51, "time_horizon": "3-10 days",
+                "thesis": "low-conviction setup", "conviction": 6.0,
+            },
+            {
+                "ticker": "TCS", "side": "BUY", "product": "CNC",
+                "strategy_family": "20d_breakout", "entry": 4100.0,
+                "hard_stop": 3940.0, "target_1": 4400.0, "target_2": 4550.0,
+                "quantity": 4, "time_horizon": "5-20 days",
+                "thesis": "stronger alternate", "conviction": 7.4,
+            },
+        ],
+    }), encoding="utf-8")
+    (run_dir / "30_trade_plan.md").write_text("# 30_trade_plan\n", encoding="utf-8")
+    (run_dir / "40_risk_report.md").write_text("# 40_risk_report\n", encoding="utf-8")
+    (run_dir / "41_pm_decision.md").write_text("# 41_pm_decision\n", encoding="utf-8")
+    (run_dir / "orders.json").write_text(json.dumps({
+        "mode": "premarket",
+        "live_orders_enabled": False,
+        "generated_by": "tradeloop.reasoning.opencode",
+        "orders": [
+            {
+                "ticker": "LTFOODS", "side": "BUY", "product": "CNC",
+                "quantity": 51, "price": 466.5, "order_type": "LIMIT",
+                "hard_stop": 447.17, "target_1": 505.17, "target_2": 524.5,
+                "max_entry_price": 466.5, "strategy_family": "20d_breakout",
+                "status": "APPROVED", "reason": "initial pm decision",
+            }
+        ],
+        "held": [],
+    }), encoding="utf-8")
+
+    class FakeClient:
+        def __init__(self):
+            self.model = ""
+
+        def call_json(self, role, system, user, schema, model=None, max_tokens=None):
+            self.model = model or ""
+            return PMDecision.model_validate({
+                "evidence": [],
+                "orders": [
+                    {
+                        "ticker": "TCS", "side": "BUY", "product": "CNC",
+                        "quantity": 4, "price": 4100.0, "order_type": "LIMIT",
+                        "hard_stop": 3940.0, "target_1": 4400.0, "target_2": 4550.0,
+                        "max_entry_price": 4100.0, "strategy_family": "20d_breakout",
+                        "status": "APPROVED", "reason": "drop low-conviction LTFOODS",
+                    }
+                ],
+                "held": [],
+            })
+
+    client = FakeClient()
+    settings = load_settings(root / "config" / "settings.yaml")
+
+    applied, retry_reason = orchestrator._manager_backchannel_retry(
+        run_dir,
+        mode="premarket",
+        backend="opencode",
+        settings=settings,
+        client=client,
+    )
+
+    assert applied is True
+    assert retry_reason is None
+    assert client.model == "openai/gpt-5.6-luna"
+    orders = json.loads((run_dir / "orders.json").read_text(encoding="utf-8"))
+    assert orders["orders"][0]["ticker"] == "TCS"
+    assert orders["generated_by"].endswith(".manager_backchannel")
+    backchannel = json.loads((run_dir / "42_manager_backchannel.json").read_text(encoding="utf-8"))
+    assert backchannel["status"] == "applied"
+
+
+def test_conviction_block_records_manager_feedback(monkeypatch, tmp_path, capsys) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+
+    def fake_prepare(mode, request="", root=None):
+        assert root is not None
+        run_dir = root / "runs" / "conviction_feedback"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def fake_reason(run_dir, mode, agent, timeout, **kwargs):
+        (run_dir / "30_trade_plan.json").write_text(json.dumps({
+            "evidence": [],
+            "tickets": [{
+                "ticker": "LTFOODS", "side": "BUY", "product": "CNC",
+                "strategy_family": "20d_breakout", "entry": 466.5,
+                "hard_stop": 447.17, "target_1": 505.17, "target_2": 524.5,
+                "quantity": 51, "time_horizon": "3-10 days",
+                "thesis": "low conviction", "conviction": 6.0,
+            }],
+        }), encoding="utf-8")
+        (run_dir / "orders.json").write_text(json.dumps({
+            "mode": mode,
+            "live_orders_enabled": False,
+            "generated_by": "tradeloop.reasoning.opencode",
+            "orders": [{
+                "ticker": "LTFOODS", "side": "BUY", "product": "CNC",
+                "quantity": 51, "price": 466.5, "order_type": "LIMIT",
+                "hard_stop": 447.17, "target_1": 505.17, "target_2": 524.5,
+                "strategy_family": "20d_breakout", "reason": "initial decision",
+            }],
+            "held": [],
+        }), encoding="utf-8")
+        return 0
+
+    class FakeClient:
+        def call_json(self, role, system, user, schema, model=None, max_tokens=None):
+            return PMDecision.model_validate({
+                "evidence": [],
+                "orders": [{
+                    "ticker": "LTFOODS", "side": "BUY", "product": "CNC",
+                    "quantity": 51, "price": 466.5, "order_type": "LIMIT",
+                    "hard_stop": 447.17, "target_1": 505.17, "target_2": 524.5,
+                    "strategy_family": "20d_breakout", "reason": "still low conviction",
+                }],
+                "held": [],
+            })
+
+    monkeypatch.setattr(orchestrator, "_prepare", fake_prepare)
+    monkeypatch.setattr(orchestrator, "_run_reasoning", fake_reason)
+    monkeypatch.setattr(orchestrator, "_make_stage_client", lambda backend, run_dir: FakeClient())
+
+    rc = orchestrator.run_cycle("premarket", root=root, backend="opencode")
+    assert rc == 1
+    feedback = (root / "memory" / "manager_feedback.md").read_text(encoding="utf-8")
+    assert "conviction_gate_blocked" in feedback
+    assert "LTFOODS" in feedback
+    assert "still_blocked" in feedback
+
+
+def test_route_cycle_manager_retry_can_shrink_oversized_order(monkeypatch, tmp_path) -> None:
+    root = _fresh_root(tmp_path)
+    monkeypatch.setattr(orchestrator, "_today", lambda: date(2026, 7, 1))
+    run_dir = root / "runs" / "route_retry"
+    run_dir.mkdir(parents=True)
+    (run_dir / "30_trade_plan.json").write_text(json.dumps({
+        "evidence": [],
+        "tickets": [{
+            "ticker": "TCS", "side": "BUY", "product": "CNC",
+            "strategy_family": "20d_breakout", "entry": 3000.0,
+            "hard_stop": 2850.0, "target_1": 3250.0, "target_2": 3400.0,
+            "quantity": 100, "time_horizon": "5-20 days",
+            "thesis": "strong setup", "conviction": 8.0,
+        }],
+    }), encoding="utf-8")
+    for name in ("30_trade_plan.md", "40_risk_report.md", "41_pm_decision.md", "03_market_regime.md"):
+        (run_dir / name).write_text(f"# {name}\n", encoding="utf-8")
+    (run_dir / "orders.json").write_text(json.dumps({
+        "mode": "premarket",
+        "live_orders_enabled": False,
+        "generated_by": "tradeloop.reasoning.opencode",
+        "orders": [{
+            "ticker": "TCS", "side": "BUY", "product": "CNC",
+            "quantity": 100, "price": 3000.0, "order_type": "LIMIT",
+            "hard_stop": 2850.0, "target_1": 3250.0, "target_2": 3400.0,
+            "strategy_family": "20d_breakout", "reason": "oversized test",
+        }],
+        "held": [],
+    }), encoding="utf-8")
+
+    class FakeClient:
+        def __init__(self):
+            self.model = ""
+
+        def call_json(self, role, system, user, schema, model=None, max_tokens=None):
+            self.model = model or ""
+            return PMDecision.model_validate({
+                "evidence": [],
+                "orders": [{
+                    "ticker": "TCS", "side": "BUY", "product": "CNC",
+                    "quantity": 8, "price": 3000.0, "order_type": "LIMIT",
+                    "hard_stop": 2850.0, "target_1": 3250.0, "target_2": 3400.0,
+                    "strategy_family": "20d_breakout", "reason": "reduce to fit cap",
+                }],
+                "held": [],
+            })
+
+    client = FakeClient()
+    monkeypatch.setattr(orchestrator, "_make_stage_client", lambda backend, run_dir: client)
+
+    rc = orchestrator.route_cycle(run_dir, root=root)
+
+    assert rc == 0
+    assert client.model == "openai/gpt-5.6-luna"
+    fills = json.loads((run_dir / "fills.json").read_text(encoding="utf-8"))
+    assert fills[0]["status"] == "FILLED"
+    assert fills[0]["payload"]["quantity"] == 8
+    backchannel = json.loads((run_dir / "42_manager_backchannel.json").read_text(encoding="utf-8"))
+    assert backchannel["event"] == "route_risk_rejected"
+    assert backchannel["status"] == "applied"
+    feedback = (root / "memory" / "manager_feedback.md").read_text(encoding="utf-8")
+    assert "route_outcome" in feedback
+    assert "manager_retry_status: applied" in feedback
+    assert "final_status: FILLED" in feedback
+
+
 def test_run_cycle_resumes_existing_run_dir_without_prepare(monkeypatch, tmp_path) -> None:
     # --run-dir: a killed cycle is completed in place; prepare must NOT run
     # (a new run dir would re-bill every stage).
@@ -315,6 +530,7 @@ def test_holdings_modes_skip_on_empty_book(monkeypatch, tmp_path, capsys) -> Non
         return 0
 
     def fake_prepare(mode, request="", root=None):
+        assert root is not None
         d = root / "runs" / f"empty_{mode}"
         d.mkdir(parents=True, exist_ok=True)
         return d

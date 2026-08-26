@@ -77,6 +77,7 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
     macro = macro_path.read_text(encoding="utf-8") if macro_path.exists() else ""
     carry_forward_path = base / "memory" / "carry_forward_context.md"
     carry_forward = carry_forward_path.read_text(encoding="utf-8") if carry_forward_path.exists() else ""
+    manager_feedback_path = base / "memory" / "manager_feedback.md"
     context = render_context(state, mode, macro)
     if carry_forward.strip():
         context = "\n".join([context.rstrip(), "", "## Carry Forward Context", "", carry_forward.strip(), ""])
@@ -98,6 +99,9 @@ def prepare(mode: str, request: str = "", root: Path | None = None, kite_client=
             "",
         ])
     (run_dir / "00_context.md").write_text(context, encoding="utf-8")
+    if manager_feedback_path.exists():
+        (run_dir / "manager_feedback.md").write_text(
+            manager_feedback_path.read_text(encoding="utf-8"), encoding="utf-8")
     if mode == "adhoc":
         request_text = request.strip()
         if not request_text:

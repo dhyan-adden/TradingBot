@@ -182,7 +182,8 @@ def _args(raw: dict, lead: str) -> tuple[str, list[str]]:
 
 
 def _verdict_line(n: dict) -> str:
-    return (f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(n.get('verdict'), n.get('verdict',''))} "
+    verdict = str(n.get("verdict", ""))
+    return (f"{pretty_ticker(n.get('ticker',''))}: {_VERDICT.get(verdict, verdict)} "
             f"(conviction {n.get('conviction','?')}/10)"
             + (f" - {n['rationale']}" if n.get("rationale") else ""))
 
@@ -288,6 +289,8 @@ def render_decision(orders_json: dict, model: str = "",
             summary = f"Auto-routed: {sym} \u00d7 {qty} shares filled ({len(filled)} filled{rej_note})."
         elif rejected:
             summary = f"Auto-routed but risk gate rejected all {len(rejected)} order(s)."
+        elif not fills:
+            summary = "Order proposed, but no route outcome was recorded."
         else:
             summary = f"Auto-routed: {len(orders)} order(s) processed."
         points = [f"{o.get('side','BUY')} {o.get('quantity','?')} {pretty_ticker(o.get('ticker',''))} "

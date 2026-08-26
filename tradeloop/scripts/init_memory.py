@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 FILES = {
     "memory/lessons_learned.md": "# Lessons Learned\n\n",
+    "memory/manager_feedback.md": "# Manager Feedback\n\n",
     "memory/trade_journal.md": "# Trade Journal\n\n",
     "memory/strategy_performance.md": (
         "# Strategy Performance\n\n"

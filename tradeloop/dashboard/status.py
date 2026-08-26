@@ -103,16 +103,71 @@ def _promotion(root: Path) -> dict:
         }
 
 
+def _autonomy(settings, live_env_enabled: bool, kill_active: bool) -> dict:
+    if kill_active:
+        effective = "halted"
+    elif live_env_enabled and settings.approval_mode == "auto" and settings.allow_auto_live:
+        effective = "live_auto_enabled"
+    elif live_env_enabled:
+        effective = "live_locked"
+    elif settings.approval_mode == "auto":
+        effective = "paper_autonomous"
+    else:
+        effective = "paper_human_loop"
+    return {
+        "approval_mode": settings.approval_mode,
+        "paper_auto_route": settings.approval_mode == "auto" and not live_env_enabled,
+        "allow_auto_live": settings.allow_auto_live,
+        "live_trading_env_enabled": live_env_enabled,
+        "effective_mode": effective,
+    }
+
+
+def _operator_attention(*, kill_active: bool, live_env_enabled: bool,
+                        promo: dict, sources: dict, latest: dict | None) -> list[dict]:
+    items: list[dict] = []
+    if kill_active:
+        items.append({"severity": "critical", "title": "Kill switch active",
+                      "detail": "No routes will execute until the kill switch is cleared."})
+    if live_env_enabled:
+        items.append({"severity": "warning", "title": "Live trading env is enabled",
+                      "detail": "Paper-first mode should normally keep ZERODHA_ENABLE_TRADING=false."})
+    if not promo.get("ready"):
+        reasons = "; ".join(str(r) for r in promo.get("reasons", [])[:3]) or "promotion gates not clear"
+        items.append({"severity": "info", "title": "Live promotion blocked", "detail": reasons})
+    if not sources.get("ok"):
+        stale = ", ".join(str(s) for s in sources.get("stale_sources", []))
+        items.append({"severity": "warning", "title": "Market sources stale", "detail": stale})
+    if latest and latest.get("approval") in {"missing_or_invalid", "conviction_blocked"}:
+        items.append({"severity": "warning", "title": "Latest run needs review",
+                      "detail": f"Approval state: {latest.get('approval')}"})
+    return items
+
+
 def dashboard_status(root: Path) -> dict:
     root = Path(root)
+    settings = load_settings(root / "config" / "settings.yaml")
     stale_sources = source_health(root)
+    sources = {
+        "ok": not stale_sources,
+        "stale_sources": stale_sources,
+    }
+    kill_active = kill_switch_active(root)
+    live_env = live_enabled()
+    promo = _promotion(root)
+    latest = _latest_run(root / "runs")
     return {
-        "kill_switch_active": kill_switch_active(root),
-        "live_trading_env_enabled": live_enabled(),
-        "live_promotion": _promotion(root),
-        "source_health": {
-            "ok": not stale_sources,
-            "stale_sources": stale_sources,
-        },
-        "latest_run": _latest_run(root / "runs"),
+        "kill_switch_active": kill_active,
+        "live_trading_env_enabled": live_env,
+        "autonomy": _autonomy(settings, live_env, kill_active),
+        "live_promotion": promo,
+        "source_health": sources,
+        "latest_run": latest,
+        "operator_attention": _operator_attention(
+            kill_active=kill_active,
+            live_env_enabled=live_env,
+            promo=promo,
+            sources=sources,
+            latest=latest,
+        ),
     }

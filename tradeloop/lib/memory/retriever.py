@@ -7,6 +7,7 @@ def relevant_memory(memory_root: Path, symbol: str, limit: int = 5) -> List[str]
     candidates: List[str] = []
     for path in [
         memory_root / "lessons_learned.md",
+        memory_root / "manager_feedback.md",
         memory_root / "trade_journal.md",
         memory_root / "strategy_performance.md",
         memory_root / "stock_dossiers" / f"{normalized}.md",
@@ -18,4 +19,3 @@ def relevant_memory(memory_root: Path, symbol: str, limit: int = 5) -> List[str]
             if normalized in block.upper():
                 candidates.append(block.strip())
     return candidates[:limit]
-

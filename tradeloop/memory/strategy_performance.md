@@ -9,4 +9,4 @@ max_drawdown_pct: 4.4495  # DEPRECATED: do not use as a gate input
 
 | Strategy | Trades | Win Rate | Expectancy R | Max Drawdown % | Confidence |
 | --- | ---: | ---: | ---: | ---: | --- |
-| position_management | 2 | 0.0 | -2.6321 | 4.4495 | provisional |
+| unknown | 2 | 0.0 | -2.6321 | 4.4495 | provisional |

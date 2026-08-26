@@ -93,6 +93,16 @@ def test_scan_activates_when_flag_set(monkeypatch, tmp_path):
     assert captured["kite_client"] is sentinel
 
 
+def test_prepare_copies_manager_feedback_into_run_dir(monkeypatch, tmp_path):
+    captured = {}
+    _hermetic(monkeypatch, tmp_path, captured)
+    (tmp_path / "memory" / "manager_feedback.md").write_text(
+        "# Manager Feedback\n\n## prior\n\naccepted\n", encoding="utf-8")
+    run_dir = prepare_cycle.prepare("premarket", root=tmp_path)
+    assert (run_dir / "manager_feedback.md").exists()
+    assert "prior" in (run_dir / "manager_feedback.md").read_text(encoding="utf-8")
+
+
 def test_injected_client_overrides_flag(monkeypatch, tmp_path):
     # an explicitly injected client is used as-is (the flag path only fills a None)
     captured = {}

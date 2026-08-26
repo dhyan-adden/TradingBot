@@ -228,6 +228,80 @@ def _conviction_block_summary(run_dir: Path) -> str | None:
     return "Blocked by conviction gate before routing."
 
 
+def _gate_summary(run_dir: Path) -> list[dict]:
+    raw = _load(run_dir / "gate_summary.json")
+    if isinstance(raw, dict) and isinstance(raw.get("gates"), list):
+        return raw["gates"]
+    gates: list[dict] = []
+    if (run_dir / "reasoning_error.txt").exists():
+        gates.append({
+            "id": "reasoning",
+            "label": "Agent reasoning",
+            "status": "blocked",
+            "severity": "blocker",
+            "detail": "reasoning_error.txt is present",
+        })
+    if (run_dir / "quality_block.json").exists():
+        gates.append({
+            "id": "analysis_quality",
+            "label": "Analysis quality",
+            "status": "blocked",
+            "severity": "blocker",
+            "detail": "quality_block.json is present",
+        })
+    block_summary = _conviction_block_summary(run_dir)
+    if block_summary:
+        gates.append({
+            "id": "conviction",
+            "label": "Minimum conviction",
+            "status": "blocked",
+            "severity": "blocker",
+            "detail": block_summary,
+        })
+    fills = _load_fills(run_dir)
+    if fills:
+        rejected = sum(1 for f in fills if f.get("status") == "RISK_REJECTED")
+        mode_blocked = sum(1 for f in fills if f.get("status") == "MODE_DISALLOWED")
+        filled = sum(1 for f in fills if f.get("status") == "FILLED")
+        gates.append({
+            "id": "route_risk",
+            "label": "Route risk engine",
+            "status": "passed" if rejected == 0 and mode_blocked == 0 else "blocked",
+            "severity": "blocker",
+            "detail": f"{filled} filled, {rejected} risk-rejected, {mode_blocked} mode-blocked",
+        })
+    return gates
+
+
+def _route_summary(fills: list | None) -> dict:
+    rows = fills or []
+    return {
+        "filled": sum(1 for f in rows if f.get("status") == "FILLED"),
+        "risk_rejected": sum(1 for f in rows if f.get("status") == "RISK_REJECTED"),
+        "mode_blocked": sum(1 for f in rows if f.get("status") == "MODE_DISALLOWED"),
+        "processed": len(rows),
+    }
+
+
+def _run_status(run_dir: Path, orders: dict, fills: list | None, error: str, live: bool) -> str:
+    if error:
+        return "failed"
+    if live:
+        return "running"
+    if _conviction_block_summary(run_dir):
+        return "blocked"
+    if fills:
+        return "routed"
+    if orders.get("orders"):
+        return "awaiting_exception_review"
+    return "completed"
+
+
+def _manager_backchannel(run_dir: Path) -> dict | None:
+    raw = _load(run_dir / "42_manager_backchannel.json")
+    return raw if isinstance(raw, dict) else None
+
+
 
 def list_runs(runs_dir: Path) -> list[RunSummary]:
     runs_dir = Path(runs_dir)
@@ -246,10 +320,9 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
             fills = _load_fills(d)
             summary = render_decision(_orders_dict(orders), fills=fills).summary
             # Conviction-blocked runs have no fills.json; show the actual outcome
-            if fills is None:
-                block_summary = _conviction_block_summary(d)
-                if block_summary:
-                    summary = block_summary
+            block_summary = _conviction_block_summary(d)
+            if block_summary:
+                summary = block_summary
         out.append(RunSummary(dir_name=d.name, mode=_mode(d.name), decision=summary))
     return out
 
@@ -288,7 +361,7 @@ def read_run(run_dir: Path) -> dict:
         else:
             view = render_stage(stage, raw, models.get(stage, ""))
         stages.append(asdict(view))
-    orders = _load(run_dir / "orders.json") or {}
+    orders = _orders_dict(_load(run_dir / "orders.json") or {})
     fills = _load_fills(run_dir)
     decision = asdict(render_decision(_orders_dict(orders), models.get("41_pm_decision", ""),
                                       fills=fills))
@@ -298,7 +371,7 @@ def read_run(run_dir: Path) -> dict:
         # a crashed run must NOT read as a clean "hold" - say so plainly
         decision["summary"] = "This run did not finish - " + error.splitlines()[0]
     # Conviction-blocked runs have no fills.json; override summary to reflect it
-    if fills is None and not error:
+    if not error:
         block_summary = _conviction_block_summary(run_dir)
         if block_summary:
             decision["summary"] = block_summary
@@ -311,4 +384,9 @@ def read_run(run_dir: Path) -> dict:
         # confident "Holding today" while the run was still scanning/reasoning
         decision["summary"] = IN_FLIGHT
     return {"dir": run_dir.name, "live": live, "stages": stages,
-            "decision": decision, "error": error, "usage": _usage_summary(run_dir)}
+            "decision": decision, "error": error, "usage": _usage_summary(run_dir),
+            "orders": orders.get("orders") or [], "held": orders.get("held") or [],
+            "fills": fills or [], "gates": _gate_summary(run_dir),
+            "manager_backchannel": _manager_backchannel(run_dir),
+            "run_status": _run_status(run_dir, orders, fills, error, live),
+            "route_summary": _route_summary(fills)}

@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
-from typing import cast
+from typing import Sequence, cast
 
 from tradeloop.lib.audit import controls, reconcile
 from tradeloop.lib.audit.ledger import ORDER_FILLED, STOP_UPDATED, Ledger, LedgerTamperError
@@ -22,12 +22,13 @@ from tradeloop.lib.data.evidence import uncited_news_candidates, validate_eviden
 from tradeloop.lib.data.grounding import load_scan_levels, validate_grounding
 from tradeloop.lib.data.snapshot import load_snapshot
 from tradeloop.lib.data.ticker_master import load_ticker_master
-from tradeloop.lib.llm import stages
+from tradeloop.lib.llm import routing, stages
 from tradeloop.lib.llm.claude_client import ClaudeStageClient
 from tradeloop.lib.llm.quality import quality_has_hard_block_new_buys
 from tradeloop.lib.llm.client import LLMClient
 from tradeloop.lib.llm.opencode_client import OpenCodeStageClient
 from tradeloop.lib.llm.schemas import AdhocIntake, HoldingsReview, Order, PMDecision, TradePlan
+from tradeloop.lib.memory.writer import append_manager_feedback
 from tradeloop.lib.risk.checks import RiskState
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.lib.risk.sizing import apply_guardrails, position_size_from_stop
@@ -48,9 +49,68 @@ _MODE_DAGS = {
                   "13_technical", "15_holdings_review"],
 }
 
+_MANAGER_BACKCHANNEL_INPUTS = (
+    "manager_feedback.md",
+    "41_pm_decision.md",
+    "40_risk_report.md",
+    "30_trade_plan.md",
+    "03_market_regime.md",
+    "analysis_quality.jsonl",
+)
+
+_FIXABLE_ROUTE_RISK_REASONS = {
+    "max_position_allocation_exceeded",
+    "max_total_deployed_exceeded",
+    "max_open_positions_exceeded",
+    "max_sector_allocation_exceeded",
+}
+
 
 def _dag_for_mode(mode: str) -> list[str]:
     return list(_MODE_DAGS.get(mode, stages.DAG))
+
+
+def _generated_by_for_backend(backend: str) -> str:
+    return {
+        "claude": "tradeloop.reasoning.claude",
+        "opencode": "tradeloop.reasoning.opencode",
+    }.get((backend or "openrouter").lower(), "tradeloop.reasoning.p1")
+
+
+def _backend_for_generated_by(generated_by: str | None) -> str:
+    value = str(generated_by or "").lower()
+    if ".opencode" in value:
+        return "opencode"
+    if ".claude" in value:
+        return "claude"
+    return "openrouter"
+
+
+def _load_json_file(path: Path) -> dict | list | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _make_stage_client(backend: str, run_dir: Path):
+    backend = (backend or "openrouter").lower()
+    if backend == "claude":
+        return ClaudeStageClient(audit_path=run_dir / "llm_calls.jsonl")
+    if backend == "opencode":
+        return OpenCodeStageClient(audit_path=run_dir / "llm_calls.jsonl")
+    return LLMClient(audit_path=run_dir / "llm_calls.jsonl")
+
+
+def _strongest_manager_model(backend: str) -> str:
+    backend = (backend or "openrouter").lower()
+    if backend == "claude":
+        return routing.claude_model_for("41_pm_decision")
+    if backend == "opencode":
+        return routing.opencode_model_for("40_risk_report")
+    return routing.model_for("41_pm_decision")
 
 
 def _gate_holiday(today: date) -> str | None:
@@ -92,6 +152,341 @@ def _deterministic_qty(entry: float, hard_stop: float, settings) -> int:
     return apply_guardrails(
         raw, entry, settings.paper_starting_inr, settings.max_position_pct,
         adv20_inr=None, min_position_size_inr=settings.min_position_size_inr)
+
+
+def _sorted_orders(orders: list[Order]) -> list[Order]:
+    horizon: dict[str, int] = {
+        "results_momentum": 5,
+        "20d_breakout": 10,
+        "post_earnings_drift": 15,
+        "ema20_pullback": 20,
+        "sector_rotation_leader": 20,
+    }
+    return sorted(
+        orders,
+        key=lambda o: horizon.get(str(o.strategy_family or "").lower(), 15),
+    )
+
+
+def _write_pm_outputs(run_dir: Path, pm: PMDecision, *, mode: str, generated_by: str) -> None:
+    orders = _sorted_orders(list(pm.orders))
+    held = list(pm.held)
+    serialised = pm.model_copy(update={"orders": orders, "held": held})
+    (run_dir / "41_pm_decision.json").write_text(
+        serialised.model_dump_json(indent=2), encoding="utf-8")
+    (run_dir / "41_pm_decision.md").write_text(
+        f"# 41_pm_decision\n\n```json\n{serialised.model_dump_json(indent=2)}\n```\n",
+        encoding="utf-8")
+    _write_orders_file(run_dir, mode=mode, generated_by=generated_by, orders=orders, held=held)
+
+
+def _write_orders_file(run_dir: Path, *, mode: str, generated_by: str,
+                       orders: list[Order], held: list[Order]) -> None:
+    orders = _sorted_orders(list(orders))
+    held = list(held)
+    orders_file = {
+        "mode": mode,
+        "live_orders_enabled": False,
+        "generated_by": generated_by,
+        "orders": [o.model_dump() for o in orders],
+        "held": [o.model_dump() for o in held],
+    }
+    (run_dir / "orders.json").write_text(json.dumps(orders_file, indent=2), encoding="utf-8")
+
+
+def _manager_backchannel_user(run_dir: Path, *, block_reason: str, threshold: float) -> str:
+    summary = {
+        "event": "conviction_gate_blocked",
+        "threshold": threshold,
+        "block_reason": block_reason,
+        "instruction": (
+            "Revise only with the supplied artifacts. Keep or drop BUY orders only if "
+            "their ticker already exists in 30_trade_plan and already clears the "
+            "threshold there. Never invent stronger conviction or new evidence."
+        ),
+    }
+    parts = ["### block_summary.json", json.dumps(summary, indent=2)]
+    for name in _MANAGER_BACKCHANNEL_INPUTS:
+        path = run_dir / name
+        if path.exists():
+            parts.append(f"### {name}\n{path.read_text(encoding='utf-8')}")
+    return "\n\n".join(parts)
+
+
+def _write_manager_backchannel(run_dir: Path, payload: dict) -> None:
+    (run_dir / "42_manager_backchannel.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8")
+    lines = [
+        "# Manager Backchannel",
+        "",
+        f"event: {payload.get('event', '')}",
+        f"status: {payload.get('status', '')}",
+        f"backend: {payload.get('backend', '')}",
+        f"model: {payload.get('model', '')}",
+        f"initial_block_reason: {payload.get('initial_block_reason', '')}",
+    ]
+    retry_reason = payload.get("retry_block_reason")
+    if retry_reason:
+        lines.append(f"retry_block_reason: {retry_reason}")
+    error = payload.get("error")
+    if error:
+        lines.append(f"error: {error}")
+    response = payload.get("manager_response")
+    if response is not None:
+        lines += ["", "```json", json.dumps(response, indent=2), "```"]
+    (run_dir / "42_manager_backchannel.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _backchannel_snapshot(run_dir: Path) -> dict:
+    raw = _load_json_file(run_dir / "42_manager_backchannel.json")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _record_manager_feedback_entry(memory_root: Path, *, heading: str, body_lines: list[str],
+                                   run_id: str, timestamp: str) -> None:
+    append_manager_feedback(memory_root, heading, "\n".join(body_lines), run_id=run_id,
+                            timestamp=timestamp)
+
+
+def _record_conviction_block_feedback(memory_root: Path, run_dir: Path, orders: Sequence,
+                                      *, threshold: float, reason: str, timestamp: str) -> None:
+    backchannel = _backchannel_snapshot(run_dir)
+    for idx, order in enumerate(orders, start=1):
+        if str(order.side).upper() != "BUY":
+            continue
+        body = [
+            "event: conviction_gate_blocked",
+            f"symbol: {order.ticker.strip().upper()}",
+            f"side: {order.side}",
+            f"quantity: {order.quantity}",
+            f"price: {order.price}",
+            f"strategy_family: {order.strategy_family or ''}",
+            f"threshold: {threshold}",
+            f"reason: {reason}",
+        ]
+        if backchannel:
+            body += [
+                f"manager_retry_event: {backchannel.get('event', '')}",
+                f"manager_retry_status: {backchannel.get('status', '')}",
+                f"manager_retry_block_reason: {backchannel.get('retry_block_reason', '')}",
+            ]
+        _record_manager_feedback_entry(
+            memory_root,
+            heading=f"{run_dir.name} conviction-blocked {idx} {order.ticker.strip().upper()}",
+            body_lines=body,
+            run_id=run_dir.name,
+            timestamp=timestamp,
+        )
+
+
+def _record_route_feedback(memory_root: Path, run_dir: Path, orders_file, routed, *, timestamp: str) -> None:
+    by_symbol = {o.ticker.strip().upper(): o for o in orders_file.orders}
+    backchannel = _backchannel_snapshot(run_dir)
+    for idx, item in enumerate(routed, start=1):
+        payload = getattr(item, "payload", {}) or {}
+        symbol = str(payload.get("symbol", "")).strip().upper()
+        order = by_symbol.get(symbol)
+        reasons = payload.get("reasons", []) if isinstance(payload, dict) else []
+        body = [
+            "event: route_outcome",
+            f"symbol: {symbol}",
+            f"final_status: {getattr(item, 'status', '')}",
+            f"routed_mode: {getattr(item, 'mode', '')}",
+            f"side: {getattr(order, 'side', payload.get('side', '')) if order else payload.get('side', '')}",
+            f"quantity: {getattr(order, 'quantity', payload.get('quantity', '')) if order else payload.get('quantity', '')}",
+            f"price: {getattr(order, 'price', payload.get('fill_price', '')) if order else payload.get('fill_price', '')}",
+            f"strategy_family: {getattr(order, 'strategy_family', '') if order else ''}",
+            f"reasons: {', '.join(str(r) for r in reasons)}",
+        ]
+        if backchannel:
+            body += [
+                f"manager_retry_event: {backchannel.get('event', '')}",
+                f"manager_retry_status: {backchannel.get('status', '')}",
+                f"manager_retry_initial_reason: {backchannel.get('initial_block_reason', '')}",
+                f"manager_retry_block_reason: {backchannel.get('retry_block_reason', '')}",
+            ]
+        _record_manager_feedback_entry(
+            memory_root,
+            heading=f"{run_dir.name} route-outcome {idx} {symbol or 'UNKNOWN'}",
+            body_lines=body,
+            run_id=run_dir.name,
+            timestamp=timestamp,
+        )
+
+
+def _manager_backchannel_retry(run_dir: Path, *, mode: str, backend: str,
+                               settings, client=None) -> tuple[bool, str | None]:
+    orders_path = run_dir / "orders.json"
+    orders_file = load_orders(orders_path)
+    block_reason = _conviction_gate(run_dir, orders_file.orders, settings.auto_route_min_conviction)
+    if not block_reason:
+        return False, None
+
+    model = _strongest_manager_model(backend)
+    payload: dict[str, object] = {
+        "event": "conviction_gate_blocked",
+        "status": "attempted",
+        "backend": backend,
+        "model": model,
+        "initial_block_reason": block_reason,
+        "threshold": settings.auto_route_min_conviction,
+    }
+    try:
+        client = client or _make_stage_client(backend, run_dir)
+        system = (
+            "You are the strongest bounded TradeLoop portfolio manager retry lane. "
+            "You have no tools and no codebase access. Use only the supplied run "
+            "artifacts. The previous PM decision failed the deterministic conviction "
+            "gate. Return a PMDecision that is equally or more conservative than the "
+            "current one. You may only keep BUY tickers that already exist in "
+            "30_trade_plan and already meet the stated threshold there. You may drop "
+            "orders, reduce size, or return no changes. Never invent new evidence, "
+            "new tickers, or higher conviction."
+        )
+        user = _manager_backchannel_user(
+            run_dir, block_reason=block_reason,
+            threshold=settings.auto_route_min_conviction,
+        )
+        pm = cast(PMDecision, client.call_json(
+            "41_pm_decision", system, user, PMDecision, model=model))
+        retry_reason = _conviction_gate(run_dir, pm.orders, settings.auto_route_min_conviction)
+        applied = bool(pm.orders) and not retry_reason
+        payload.update({
+            "status": "applied" if applied else "still_blocked",
+            "retry_block_reason": retry_reason or "",
+            "manager_response": pm.model_dump(),
+        })
+        if applied:
+            generated_by = str((json.loads(orders_path.read_text(encoding="utf-8")) or {}).get("generated_by")
+                               or _generated_by_for_backend(backend))
+            if not generated_by.endswith(".manager_backchannel"):
+                generated_by = f"{generated_by}.manager_backchannel"
+            _write_pm_outputs(run_dir, pm, mode=mode, generated_by=generated_by)
+        _write_manager_backchannel(run_dir, payload)
+        return applied, retry_reason
+    except Exception as exc:
+        payload.update({"status": "error", "error": str(exc)})
+        _write_manager_backchannel(run_dir, payload)
+        return False, block_reason
+
+
+def _route_reject_reason_map(routed) -> dict[str, list[str]]:
+    rejected: dict[str, list[str]] = {}
+    for item in routed:
+        if str(getattr(item, "status", "")).upper() != "RISK_REJECTED":
+            continue
+        payload = getattr(item, "payload", {}) or {}
+        symbol = str(payload.get("symbol", "")).strip().upper()
+        if not symbol:
+            continue
+        rejected[symbol] = [str(r) for r in payload.get("reasons", [])]
+    return rejected
+
+
+def _fixable_route_rejections(routed) -> dict[str, list[str]]:
+    if any(str(getattr(item, "status", "")).upper() == "FILLED" for item in routed):
+        return {}
+    rejected = _route_reject_reason_map(routed)
+    if not rejected:
+        return {}
+    if any(not reasons or any(r not in _FIXABLE_ROUTE_RISK_REASONS for r in reasons)
+           for reasons in rejected.values()):
+        return {}
+    return rejected
+
+
+def _manager_route_retry_user(run_dir: Path, rejected: dict[str, list[str]]) -> str:
+    summary = {
+        "event": "route_risk_rejected",
+        "rejections": rejected,
+        "instruction": (
+            "Return a more conservative PMDecision. You may only keep or drop BUY orders "
+            "already present in the current orders.json, and any kept BUY quantity must be "
+            "less than or equal to the current quantity. Do not add tickers, change prices, "
+            "or alter stops, targets, or side."
+        ),
+    }
+    parts = ["### route_rejections.json", json.dumps(summary, indent=2)]
+    for name in ("orders.json",) + _MANAGER_BACKCHANNEL_INPUTS:
+        path = run_dir / name
+        if path.exists():
+            parts.append(f"### {name}\n{path.read_text(encoding='utf-8')}")
+    return "\n\n".join(parts)
+
+
+def _validate_conservative_route_retry(original_orders, revised_orders) -> str | None:
+    original_by_symbol = {o.ticker.strip().upper(): o for o in original_orders}
+    for revised in revised_orders:
+        symbol = revised.ticker.strip().upper()
+        original = original_by_symbol.get(symbol)
+        if original is None:
+            return f"new_order_not_allowed:{symbol}"
+        if revised.side != "BUY" or original.side != "BUY":
+            return f"only_existing_buy_orders_may_change:{symbol}"
+        if int(revised.quantity) > int(original.quantity):
+            return f"quantity_increase_not_allowed:{symbol}"
+        if any([
+            revised.product != original.product,
+            float(revised.price or 0.0) != float(original.price or 0.0),
+            str(revised.order_type) != str(original.order_type),
+            float(revised.hard_stop or 0.0) != float(original.hard_stop or 0.0),
+            float(revised.target_1 or 0.0) != float(original.target_1 or 0.0),
+            float(revised.target_2 or 0.0) != float(original.target_2 or 0.0),
+            float(revised.max_entry_price or 0.0) != float(original.max_entry_price or 0.0),
+            str(revised.strategy_family or "") != str(original.strategy_family or ""),
+        ]):
+            return f"only_quantity_or_drop_allowed:{symbol}"
+    return None
+
+
+def _manager_route_rejection_retry(run_dir: Path, *, mode: str, generated_by: str,
+                                   settings, rejected: dict[str, list[str]], client=None) -> tuple[bool, str | None]:
+    orders_path = run_dir / "orders.json"
+    current = load_orders(orders_path)
+    backend = _backend_for_generated_by(generated_by)
+    model = _strongest_manager_model(backend)
+    payload: dict[str, object] = {
+        "event": "route_risk_rejected",
+        "status": "attempted",
+        "backend": backend,
+        "model": model,
+        "initial_block_reason": json.dumps(rejected, sort_keys=True),
+    }
+    try:
+        client = client or _make_stage_client(backend, run_dir)
+        system = (
+            "You are the strongest bounded TradeLoop risk-repair manager lane. "
+            "You have no tools and no codebase access. Use only the supplied run artifacts. "
+            "The deterministic route gate rejected the current BUY orders on allocation or cap "
+            "limits. Return a PMDecision that is strictly more conservative: only drop current "
+            "BUY orders or reduce their quantities. Do not add tickers, do not change price, "
+            "stop, targets, side, product, or strategy family, and do not modify SELL orders."
+        )
+        user = _manager_route_retry_user(run_dir, rejected)
+        pm = cast(PMDecision, client.call_json(
+            "41_pm_decision", system, user, PMDecision, model=model))
+        validation_error = _validate_conservative_route_retry(current.orders, pm.orders)
+        payload["manager_response"] = pm.model_dump()
+        if validation_error:
+            payload.update({"status": "invalid_counter_request", "retry_block_reason": validation_error})
+            _write_manager_backchannel(run_dir, payload)
+            return False, validation_error
+        retry_reason = _conviction_gate(run_dir, pm.orders, settings.auto_route_min_conviction)
+        if retry_reason:
+            payload.update({"status": "still_blocked", "retry_block_reason": retry_reason})
+            _write_manager_backchannel(run_dir, payload)
+            return False, retry_reason
+        generated = str(current.generated_by or generated_by)
+        if not generated.endswith(".manager_backchannel"):
+            generated = f"{generated}.manager_backchannel"
+        _write_pm_outputs(run_dir, pm, mode=mode, generated_by=generated)
+        payload["status"] = "applied"
+        _write_manager_backchannel(run_dir, payload)
+        return True, None
+    except Exception as exc:
+        payload.update({"status": "error", "error": str(exc)})
+        _write_manager_backchannel(run_dir, payload)
+        return False, str(exc)
 
 
 def _size_trade_plan(run_dir: Path, settings) -> None:
@@ -229,6 +624,37 @@ def _write_fills_summary(run_dir: Path, *, success: bool, n_orders: int,
     (run_dir / "fills_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _gate(gate_id: str, label: str, status: str, detail: str,
+          severity: str = "blocker") -> dict[str, str]:
+    return {
+        "id": gate_id,
+        "label": label,
+        "status": status,
+        "severity": severity,
+        "detail": detail,
+    }
+
+
+def _write_gate_summary(run_dir: Path, *, mode: str, phase: str, settings,
+                        gates: list[dict[str, str]], summary: str) -> None:
+    payload = {
+        "run_dir": run_dir.name,
+        "mode": mode,
+        "phase": phase,
+        "autonomy": {
+            "approval_mode": settings.approval_mode,
+            "paper_auto_route": settings.approval_mode == "auto" and not live_enabled(),
+            "live_env_enabled": live_enabled(),
+            "allow_auto_live": settings.allow_auto_live,
+        },
+        "gates": gates,
+        "summary": summary,
+        "updated_at": _now_iso(),
+    }
+    (run_dir / "gate_summary.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8")
+
+
 
 def _stage_done(run_dir: Path, name: str) -> bool:
     """Resume guard: a stage whose validated .json artifact already exists is
@@ -294,16 +720,8 @@ def _run_reasoning(run_dir: Path, mode: str, backend: str, timeout: int,
         raise ValueError(
             f"unknown reasoning backend {backend!r} (use claude|opencode|openrouter)")
     if client is None:
-        if backend == "claude":
-            client = ClaudeStageClient(audit_path=run_dir / "llm_calls.jsonl")
-        elif backend == "opencode":
-            client = OpenCodeStageClient(audit_path=run_dir / "llm_calls.jsonl")
-        else:
-            client = LLMClient(audit_path=run_dir / "llm_calls.jsonl")
-    generated_by = {
-        "claude": "tradeloop.reasoning.claude",
-        "opencode": "tradeloop.reasoning.opencode",
-    }.get(backend, "tradeloop.reasoning.p1")
+        client = _make_stage_client(backend, run_dir)
+    generated_by = _generated_by_for_backend(backend)
     return _run_reasoning_dag(run_dir, mode, timeout, client, settings, generated_by, root)
 
 
@@ -315,6 +733,7 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
     the validated PMDecision. Client-agnostic: OpenRouter or Claude behind the same
     loop (route_orders_file reads the OrdersFile shape and runs evaluate() on every order)."""
     deadline = time.monotonic() + timeout  # bound the DAG exactly as P0's subprocess timeout= did
+    pm_result: PMDecision | None = None
 
     dag = _dag_for_mode(mode)
     if mode == "adhoc" and (run_dir / "user_request.md").exists():
@@ -353,6 +772,7 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
 
     if "41_pm_decision" in dag:
         pm = PMDecision.model_validate_json((run_dir / "41_pm_decision.json").read_text())
+        pm_result = pm
         orders, held = pm.orders, pm.held
     elif "15_holdings_review" in dag:
         orders, stop_updates = _holdings_actions(run_dir, mode,
@@ -363,30 +783,17 @@ def _run_reasoning_dag(run_dir: Path, mode: str, timeout: int, client,
     else:  # research-only adhoc: no PM stage ran, so there is nothing to route
         orders, held = [], []
 
-    # Slot-priority sort: shorter-horizon strategies are processed first by route_orders_file.
-    # When all 4 slots fill, the last orders in the list are the ones rejected - this
-    # ensures a 5-day results_momentum claim takes a slot over a 20-day sector leader,
-    # maximising slot turnover and the number of trades the system can complete.
-    _HORIZON: dict[str, int] = {
-        "results_momentum":       5,
-        "20d_breakout":           10,
-        "post_earnings_drift":    15,
-        "ema20_pullback":         20,
-        "sector_rotation_leader": 20,
-    }
-    orders = sorted(
-        orders,
-        key=lambda o: _HORIZON.get(str(o.strategy_family or "").lower(), 15)
-    )
-
-    orders_file = {
-        "mode": mode,
-        "live_orders_enabled": False,      # paper default; live only past promotion gate
-        "generated_by": generated_by,
-        "orders": [o.model_dump() for o in orders],
-        "held": [o.model_dump() for o in held],
-    }
-    (run_dir / "orders.json").write_text(json.dumps(orders_file, indent=2), encoding="utf-8")
+    if "41_pm_decision" in dag:
+        _write_pm_outputs(
+            run_dir,
+            (pm_result or PMDecision(orders=orders, held=held, evidence=[])).model_copy(
+                update={"orders": orders, "held": held}),
+            mode=mode,
+            generated_by=generated_by,
+        )
+    else:
+        _write_orders_file(run_dir, mode=mode, generated_by=generated_by,
+                           orders=orders, held=held)
     return 0
 
 
@@ -420,6 +827,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
     with validated artifacts are not re-billed (see _stage_done)."""
     settings = load_settings(root / "config" / "settings.yaml")
     backend = backend or os.getenv("TRADELOOP_BACKEND", "openrouter")
+    live_active = live_enabled()
 
     if run_dir is not None and not Path(run_dir).name.endswith(f"_{mode}"):
         # the run dir's trailing token drives route-time policy; a mismatch would
@@ -435,7 +843,7 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
     if reason:
         print(f"tradeloop_cycle=HALT reason={reason}")
         return 0
-    if live_enabled() and not live_promotion_ready(root, settings):
+    if live_active and not live_promotion_ready(root, settings):
         print("tradeloop_cycle=LIVE_NOT_READY")
         return 2
     if mode in _MODE_DAGS and not _portfolio_state(root).positions:
@@ -454,12 +862,36 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
             run_dir = Path(run_dir)
         else:
             run_dir = _prepare(mode, request, root=root) if _prepare_takes_root() else _prepare(mode, request)
+        gates = [
+            _gate("holiday", "Market holiday", "passed", "NSE trading day"),
+            _gate("kill_switch", "Kill switch", "passed", "kill switch is not active"),
+            _gate(
+                "live_promotion",
+                "Live promotion",
+                "passed" if live_active else "not_applicable",
+                "live promotion gate cleared" if live_active else "paper route does not need live promotion",
+            ),
+        ]
+        _write_gate_summary(
+            run_dir,
+            mode=mode,
+            phase="reasoning",
+            settings=settings,
+            gates=gates,
+            summary="Reasoning started after preflight gates passed.",
+        )
         rc = _run_reasoning(run_dir, mode, backend, settings.cycle_timeout_seconds,
                             settings=settings, root=root)
         if rc == -1:
+            _write_gate_summary(
+                run_dir, mode=mode, phase="failed", settings=settings, gates=gates,
+                summary="Reasoning timed out before an order decision was produced.")
             print("tradeloop_cycle=TIMEOUT")
             return 1
         if rc != 0:
+            _write_gate_summary(
+                run_dir, mode=mode, phase="failed", settings=settings, gates=gates,
+                summary=f"Reasoning failed with rc={rc}.")
             print(f"tradeloop_cycle=REASONING_FAILED rc={rc}")
             return 1
 
@@ -468,7 +900,14 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         try:
             orders = load_orders(run_dir / "orders.json").orders
             n_orders = len(orders)
+            gates.append(_gate("orders_schema", "Order schema", "passed",
+                               f"orders.json validated with {n_orders} proposed order(s)"))
         except Exception:
+            gates.append(_gate("orders_schema", "Order schema", "blocked",
+                               "orders.json could not be validated"))
+            _write_gate_summary(
+                run_dir, mode=mode, phase="failed", settings=settings, gates=gates,
+                summary="The run produced an invalid orders file.")
             print("tradeloop_cycle=ORDERS_INVALID")
             return 1
 
@@ -486,8 +925,18 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         if snap is not None:
             ev = validate_evidence(run_dir, snap)
             if not ev.ok:
+                gates.append(_gate("evidence", "Evidence citations", "blocked",
+                                   f"missing {len(ev.missing)} cited evidence item(s)"))
+                _write_gate_summary(
+                    run_dir, mode=mode, phase="blocked", settings=settings, gates=gates,
+                    summary="The evidence gate blocked the proposal.")
                 print(f"tradeloop_cycle=EVIDENCE_INVALID missing={len(ev.missing)} run_dir={run_dir}")
                 return 1
+            gates.append(_gate("evidence", "Evidence citations", "passed",
+                               "all referenced evidence exists"))
+        else:
+            gates.append(_gate("evidence", "Evidence citations", "skipped",
+                               "no frozen snapshot was present", "warning"))
 
         # Heuristic tripwire (warn, never block): news-track shortlist names
         # with zero citations anywhere means the citation chain may have gone
@@ -503,8 +952,18 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         if scan_levels:
             gr = validate_grounding(orders, scan_levels)
             if not gr.ok:
+                gates.append(_gate("price_grounding", "Price grounding", "blocked",
+                                   f"{len(gr.violations)} order level(s) did not match the frozen scan"))
+                _write_gate_summary(
+                    run_dir, mode=mode, phase="blocked", settings=settings, gates=gates,
+                    summary="The price-grounding gate blocked the proposal.")
                 print(f"tradeloop_cycle=PRICE_UNGROUNDED violations={len(gr.violations)} run_dir={run_dir}")
                 return 1
+            gates.append(_gate("price_grounding", "Price grounding", "passed",
+                               "entry and stop levels match the frozen scan"))
+        else:
+            gates.append(_gate("price_grounding", "Price grounding", "skipped",
+                               "no frozen scanner levels were present", "warning"))
 
         # Quality gate: a hard_block/new_buys quality line forbids any NEW BUY.
         # SELL-only exit orders are still allowed (risk-managed unwinds), so a
@@ -516,10 +975,20 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
                     "reason": "hard_block/new_buys quality line present; BUY orders forbidden",
                     "orders": n_orders,
                 }, indent=2), encoding="utf-8")
+                gates.append(_gate("analysis_quality", "Analysis quality", "blocked",
+                                   "hard_block/new_buys quality line present"))
+                _write_gate_summary(
+                    run_dir, mode=mode, phase="blocked", settings=settings, gates=gates,
+                    summary="The analysis-quality gate blocked new BUY orders.")
                 print(f"tradeloop_cycle=QUALITY_BLOCKED run_dir={run_dir}")
                 return 1
+        gates.append(_gate("analysis_quality", "Analysis quality", "passed",
+                           "no hard block on new BUY orders was present"))
 
         if settings.approval_mode != "auto":
+            _write_gate_summary(
+                run_dir, mode=mode, phase="awaiting_approval", settings=settings, gates=gates,
+                summary="Proposal is waiting for human approval.")
             print(f"tradeloop_cycle=AWAITING_APPROVAL mode={mode} orders={n_orders} run_dir={run_dir}")
             return 0
 
@@ -528,10 +997,46 @@ def run_cycle(mode: str, request: str = "", root: Path = ROOT,
         # gate is a no-op for them. Only premarket/adhoc BUY entries are checked.
         block = _conviction_gate(run_dir, orders, settings.auto_route_min_conviction)
         if block:
-            _write_fills_summary(run_dir, success=False, n_orders=n_orders, reason=block)
-            print(f"tradeloop_cycle=CONVICTION_BLOCKED reason={block} run_dir={run_dir}")
-            return 1
+            rescued, retry_block = _manager_backchannel_retry(
+                run_dir,
+                mode=mode,
+                backend=backend,
+                settings=settings,
+            )
+            if rescued:
+                orders = load_orders(run_dir / "orders.json").orders
+                n_orders = len(orders)
+                print(f"tradeloop_cycle=MANAGER_REVISED_FOR_ROUTE run_dir={run_dir}")
+            else:
+                _write_fills_summary(
+                    run_dir,
+                    success=False,
+                    n_orders=n_orders,
+                    reason=retry_block or block,
+                )
+                _record_conviction_block_feedback(
+                    root / "memory",
+                    run_dir,
+                    orders,
+                    threshold=settings.auto_route_min_conviction,
+                    reason=retry_block or block,
+                    timestamp=_now_iso(),
+                )
+                gates.append(_gate("conviction", "Minimum conviction", "blocked",
+                                   retry_block or block))
+                _write_gate_summary(
+                    run_dir, mode=mode, phase="blocked", settings=settings, gates=gates,
+                    summary="The minimum-conviction gate blocked auto-routing.")
+                print(
+                    f"tradeloop_cycle=CONVICTION_BLOCKED reason={retry_block or block} "
+                    f"run_dir={run_dir}")
+                return 1
+        gates.append(_gate("conviction", "Minimum conviction", "passed",
+                           f"all BUY orders meet min={settings.auto_route_min_conviction}"))
 
+        _write_gate_summary(
+            run_dir, mode=mode, phase="auto_routing", settings=settings, gates=gates,
+            summary="Auto-routing started after all propose gates passed.")
         print(f"tradeloop_cycle=AUTO_ROUTING mode={mode} orders={n_orders} run_dir={run_dir}")
         _pending_auto_route = run_dir
 
@@ -693,6 +1198,7 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         # intraday exits only). prepare_cycle names run dirs `<ts>_<mode>`, so the
         # trailing token is the authoritative mode regardless of backend.
         cycle_mode = run_dir.name.rsplit("_", 1)[-1]
+        current_orders = load_orders(orders_path)
         try:
             routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led, mode=cycle_mode,
                                        live_route_authorized=live_enabled())
@@ -700,11 +1206,45 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
             fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
             print("tradeloop_route=ORDERS_INVALID")
             return 1
+        rejected_map = _fixable_route_rejections(routed)
+        if rejected_map:
+            rescued, retry_reason = _manager_route_rejection_retry(
+                run_dir,
+                mode=cycle_mode,
+                generated_by=current_orders.generated_by or "",
+                settings=settings,
+                rejected=rejected_map,
+            )
+            if rescued:
+                current_orders = load_orders(orders_path)
+                try:
+                    routed = route_orders_file(orders_path, fills_path, book, settings, root=root, ledger=led,
+                                               mode=cycle_mode, live_route_authorized=live_enabled())
+                except Exception as exc:
+                    fills_path.write_text(json.dumps({"error": "ORDERS_INVALID", "detail": str(exc)}), encoding="utf-8")
+                    print("tradeloop_route=ORDERS_INVALID")
+                    return 1
+                second_rejected = _route_reject_reason_map(routed)
+                if second_rejected and not any(str(getattr(item, "status", "")).upper() == "FILLED"
+                                               for item in routed):
+                    backend = _backend_for_generated_by(current_orders.generated_by)
+                    _write_manager_backchannel(run_dir, {
+                        "event": "route_risk_rejected",
+                        "status": "still_rejected_after_retry",
+                        "backend": backend,
+                        "model": _strongest_manager_model(backend),
+                        "initial_block_reason": json.dumps(rejected_map, sort_keys=True),
+                        "retry_block_reason": json.dumps(second_rejected, sort_keys=True),
+                        "manager_response": {"orders": [o.model_dump() for o in current_orders.orders]},
+                    })
+                    print(f"tradeloop_route=MANAGER_REPAIR_BLOCKED reason={json.dumps(second_rejected, sort_keys=True)}")
+            elif retry_reason:
+                print(f"tradeloop_route=MANAGER_REPAIR_BLOCKED reason={retry_reason}")
         # Persist this cycle's FILLED fills — the whole point of the book.
         # Without this append, positions would not survive to the next cycle.
         new_fills = [f for f in book.fills[pre_fills:] if f.status == "FILLED"]
         if new_fills:
-            approved = load_orders(orders_path).orders
+            approved = current_orders.orders
             stops = {o.ticker.strip().upper(): float(o.hard_stop)
                      for o in approved if o.hard_stop is not None}
             # Entry plan (target, strategy) rides the BUY fill event so attribution
@@ -737,6 +1277,29 @@ def route_cycle(run_dir: Path, root: Path = ROOT) -> int:
         filled = sum(1 for r in routed if r.status == "FILLED")
         rejected = sum(1 for r in routed if r.status == "RISK_REJECTED")
         mode_blocked = sum(1 for r in routed if r.status == "MODE_DISALLOWED")
+        summary_data = _load_json_file(run_dir / "gate_summary.json")
+        gates = list(summary_data.get("gates", [])) if isinstance(summary_data, dict) else []
+        route_status = "passed" if rejected == 0 and mode_blocked == 0 else "blocked"
+        gates.append(_gate(
+            "route_risk",
+            "Route risk engine",
+            route_status,
+            f"{filled} filled, {rejected} risk-rejected, {mode_blocked} mode-blocked",
+        ))
+        _write_gate_summary(
+            run_dir,
+            mode=cycle_mode,
+            phase="routed" if route_status == "passed" else "blocked",
+            settings=settings,
+            gates=gates,
+            summary=(
+                "Paper/live route completed after deterministic gates passed."
+                if route_status == "passed" else
+                "Route completed with deterministic blocks."
+            ),
+        )
+        _record_route_feedback(root / "memory", run_dir, current_orders, routed,
+                               timestamp=_now_iso())
         # Post-route accountability sweep (P4). Observability only, over the fills just
         # committed to the ledger - it must NEVER turn a good route into a failure, so a
         # throwing audit is recorded and the route still reports OK.

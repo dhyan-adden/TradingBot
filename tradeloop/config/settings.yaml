@@ -57,7 +57,7 @@ trading:
 
 execution:
   approval_mode: auto
-  allow_auto_live: true
+  allow_auto_live: false
   auto_route_min_conviction: 6.5
   live_canary:
     enabled: true

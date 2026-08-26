@@ -24,10 +24,18 @@ def _flat(starting_cash_inr: float) -> dict:
         "prices_live": False,
         "holdings": [],
         "transactions": [],
+        "exposure": {
+            "deployed_pct": 0.0,
+            "open_positions": 0,
+            "positions_limit": None,
+            "sector_exposure": [],
+        },
     }
 
 
-def portfolio_view(ledger_path: Path, starting_cash_inr: float, price_fn=None) -> dict:
+def portfolio_view(ledger_path: Path, starting_cash_inr: float, price_fn=None,
+                   max_open_positions: int | None = None,
+                   sector_map: dict[str, str] | None = None) -> dict:
     """price_fn: (list[str]) -> {symbol: ltp}; failures degrade to book values."""
     ledger_path = Path(ledger_path)
     if not ledger_path.exists():
@@ -85,6 +93,7 @@ def portfolio_view(ledger_path: Path, starting_cash_inr: float, price_fn=None) -
 
     holdings = []
     invested_total = market_total = 0.0
+    sector_totals: dict[str, float] = {}
     for symbol in sorted(book.positions):
         quantity = book.positions[symbol]
         avg_price = book.avg_prices.get(symbol, 0.0)
@@ -104,10 +113,17 @@ def portfolio_view(ledger_path: Path, starting_cash_inr: float, price_fn=None) -
             "hard_stop": stop,
             "stop_distance_pct": round((ltp - stop) / ltp * 100, 2) if ltp is not None and stop else None,
         })
+        sector = (sector_map or {}).get(symbol, "UNKNOWN") or "UNKNOWN"
+        sector_totals[sector] = sector_totals.get(sector, 0.0) + market
         invested_total += invested
         market_total += market
 
     equity = book.cash_inr + market_total
+    sector_exposure = [{
+        "sector": sector,
+        "market_value_inr": round(value, 2),
+        "equity_pct": round(value / equity * 100, 2) if equity else 0.0,
+    } for sector, value in sorted(sector_totals.items(), key=lambda item: item[1], reverse=True)]
     return {
         "cash_inr": round(book.cash_inr, 2),
         "invested_inr": round(invested_total, 2),
@@ -119,4 +135,10 @@ def portfolio_view(ledger_path: Path, starting_cash_inr: float, price_fn=None) -
         "prices_live": bool(prices),
         "holdings": holdings,
         "transactions": list(reversed(transactions)),  # newest first for display
+        "exposure": {
+            "deployed_pct": round(market_total / equity * 100, 2) if equity else 0.0,
+            "open_positions": len(book.positions),
+            "positions_limit": max_open_positions,
+            "sector_exposure": sector_exposure,
+        },
     }

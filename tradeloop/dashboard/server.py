@@ -29,6 +29,22 @@ def _starting_cash(root: Path) -> float:
         return 100000.0
 
 
+def _portfolio_inputs(root: Path) -> tuple[float, int | None, dict[str, str]]:
+    try:
+        from tradeloop.lib.config import load_settings
+        from tradeloop.lib.data.ticker_master import load_ticker_master
+
+        settings = load_settings(root / "config" / "settings.yaml")
+        records = load_ticker_master(root / "config" / "universe.yaml")
+        return (
+            float(settings.paper_starting_inr),
+            int(settings.max_open_positions),
+            {r.symbol.strip().upper(): r.sector for r in records},
+        )
+    except Exception:
+        return _starting_cash(root), None, {}
+
+
 def launch_propose(repo_root: Path, python: str = sys.executable, launcher=subprocess.Popen) -> str:
     """Start a background PROPOSE cycle on the Claude backend. Suggestions only -
     never routes. Returns "" (the run-dir name is minted inside the child; the
@@ -75,8 +91,11 @@ def handle_api(path: str, query: dict, runs_dir: Path, price_fn=_live_prices) ->
         return 200, read_run(d)
     if path == "/api/portfolio":
         root = runs_dir.parent  # tradeloop/runs -> tradeloop
+        starting_cash, max_open_positions, sector_map = _portfolio_inputs(root)
         return 200, portfolio_view(root / "state" / "ledger.db",
-                                    _starting_cash(root), price_fn=price_fn)
+                                    starting_cash, price_fn=price_fn,
+                                    max_open_positions=max_open_positions,
+                                    sector_map=sector_map)
     if path == "/api/status":
         root = runs_dir.parent  # tradeloop/runs -> tradeloop
         return 200, dashboard_status(root)

@@ -1,245 +1,493 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>TradeLoop</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>TradeLoop Autopilot</title>
 <style>
-  body { font: 16px/1.5 system-ui, sans-serif; max-width: 780px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
-  h1 { font-size: 22px; }
-  select, button { font: inherit; padding: 6px 10px; }
-  .card { border: 1px solid #e2e2e2; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
-  .card h3 { margin: 0 0 2px; font-size: 17px; }
-  .cardhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-  .model { color: #555; font-size: 11px; background: #eef1f5; border-radius: 6px; padding: 2px 7px; white-space: nowrap; flex: none; }
-  .role { color: #666; font-size: 13px; margin: 0 0 8px; }
-  .summary { font-weight: 600; margin: 0 0 6px; }
-  ul { margin: 6px 0 0; padding-left: 20px; }
-  .decision { border-color: #2b7; background: #f3fbf6; }
-  .waiting { color: #999; font-style: italic; }
-  #bar { display: flex; gap: 10px; align-items: center; }
-  h2 { font-size: 18px; margin: 22px 0 8px; }
-  .tiles { display: flex; gap: 10px; flex-wrap: wrap; }
-  .tile { border: 1px solid #e2e2e2; border-radius: 10px; padding: 10px 14px; flex: 1 1 120px; }
-  .tile .label { color: #666; font-size: 12px; }
-  .tile .value { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 14px; }
-  th { color: #666; font-weight: 600; text-align: left; }
-  th, td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .gain { color: #1a7f4b; } .loss { color: #b3362c; }
-  .pricenote { color: #888; font-size: 12px; }
-  .side { font-size: 12px; border-radius: 6px; padding: 1px 7px; background: #eef1f5; }
-  li.arg { list-style: none; margin: 3px 0 3px 10px; color: #444; }
-  li.arg .side { font-size: 10px; font-weight: 650; }
-  .statusgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-  .statusitem { border: 1px solid #e2e2e2; border-radius: 10px; padding: 10px 12px; }
-  .statusitem .label { color: #666; font-size: 12px; }
-  .statusitem .value { font-weight: 650; }
-  .ok { color: #1a7f4b; } .warn { color: #9a6700; } .bad { color: #b3362c; }
-  .usage { margin: 12px 0; }
-  .usage-note { color: #666; font-size: 12px; margin: 4px 0 0; }
+  :root {
+    --bg: #070a12;
+    --bg-soft: #0b1020;
+    --panel: rgba(16, 23, 37, 0.92);
+    --panel-soft: rgba(21, 31, 49, 0.9);
+    --line: rgba(148, 163, 184, 0.18);
+    --text: #eef3ff;
+    --muted: #8fa1bd;
+    --muted-2: #60708a;
+    --green: #38d996;
+    --amber: #f5bd4f;
+    --red: #ff6b6b;
+    --blue: #70a7ff;
+    --purple: #ad8cff;
+    --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--text);
+    background:
+      radial-gradient(circle at top left, rgba(112, 167, 255, 0.22), transparent 34rem),
+      radial-gradient(circle at 80% 12%, rgba(56, 217, 150, 0.13), transparent 28rem),
+      linear-gradient(135deg, var(--bg), var(--bg-soft) 54%, #060812);
+    font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+
+  .app-shell { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 24px 0 48px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 42px; height: 42px; border-radius: 14px; background: linear-gradient(145deg, var(--blue), var(--green)); box-shadow: 0 0 32px rgba(112, 167, 255, 0.35); }
+  h1 { font-size: clamp(25px, 3vw, 38px); line-height: 1; margin: 0; letter-spacing: -0.04em; }
+  .subtitle { margin: 6px 0 0; color: var(--muted); }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  button, select {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 14px;
+    font: inherit;
+  }
+  button { cursor: pointer; transition: transform 120ms ease, border-color 120ms ease, background 120ms ease; }
+  button:hover { transform: translateY(-1px); border-color: rgba(112, 167, 255, 0.55); background: rgba(112, 167, 255, 0.12); }
+  button.primary { background: linear-gradient(135deg, rgba(112, 167, 255, 0.9), rgba(56, 217, 150, 0.8)); border: 0; color: #05101a; font-weight: 750; }
+  button.danger { border-color: rgba(255, 107, 107, 0.35); color: #ffc8c8; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .status-line { color: var(--muted); font-size: 13px; min-height: 20px; }
+
+  .tabbar { display: flex; gap: 8px; overflow-x: auto; padding: 8px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255, 255, 255, 0.04); margin-bottom: 18px; }
+  .tabbar button { flex: 0 0 auto; padding: 9px 13px; border-radius: 14px; color: var(--muted); }
+  .tabbar button.active { color: var(--text); background: rgba(112, 167, 255, 0.18); border-color: rgba(112, 167, 255, 0.45); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .hero-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .panel, .hero-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .hero-card { padding: 18px; min-height: 138px; position: relative; }
+  .hero-card.primary { background: linear-gradient(145deg, rgba(112, 167, 255, 0.24), rgba(16, 23, 37, 0.96)); }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .hero-value { font-size: clamp(25px, 3vw, 40px); line-height: 1.05; font-weight: 800; letter-spacing: -0.05em; margin-top: 12px; }
+  .hero-detail { color: var(--muted); margin-top: 10px; }
+  .panel { padding: 18px; margin-bottom: 14px; }
+  .panel-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  h2, h3 { margin: 0; letter-spacing: -0.025em; }
+  h2 { font-size: 22px; }
+  h3 { font-size: 17px; }
+  .muted { color: var(--muted); }
+  .tiny { font-size: 12px; color: var(--muted); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .metric { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 18px; padding: 13px; }
+  .metric .value { font-size: 22px; font-weight: 780; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 700; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .ok, .passed, .filled { color: var(--green); }
+  .warn, .warning, .skipped, .running { color: var(--amber); }
+  .bad, .blocked, .failed, .risk_rejected, .mode_blocked { color: var(--red); }
+  .info, .not_applicable, .completed, .routed { color: var(--blue); }
+  .gain { color: var(--green); }
+  .loss { color: var(--red); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); border-radius: 999px; padding: 6px 9px; color: var(--muted); }
+  .data-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  th, td { padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr:hover td { background: rgba(255, 255, 255, 0.025); }
+  .gate-timeline, .agent-timeline { display: grid; gap: 10px; }
+  .gate-row, .agent-row { display: grid; grid-template-columns: 170px 1fr auto; gap: 14px; align-items: start; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 18px; padding: 13px; }
+  .agent-row { grid-template-columns: 190px 1fr 140px; }
+  .points { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
+  .points li { margin: 3px 0; }
+  .history-list { display: grid; gap: 10px; }
+  .history-item { width: 100%; text-align: left; border-radius: 18px; background: var(--panel-soft); padding: 13px; display: grid; grid-template-columns: 220px 90px 1fr; gap: 12px; }
+  .empty { color: var(--muted); padding: 18px; border: 1px dashed var(--line); border-radius: 18px; }
+
+  @media (max-width: 980px) {
+    .hero-grid { grid-template-columns: 1fr 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .topbar { align-items: flex-start; flex-direction: column; }
+    .actions { justify-content: flex-start; }
+  }
+  @media (max-width: 760px) {
+    .app-shell { width: min(100% - 20px, 1480px); padding-top: 14px; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .gate-row, .agent-row, .history-item { grid-template-columns: 1fr; }
+    .panel, .hero-card { border-radius: 18px; }
+  }
 </style>
-<h1>TradeLoop - what the bot is thinking</h1>
-<div id="bar">
-  <button id="runNow">Run now</button>
-  <button id="routePaper">Route paper orders</button>
-  <select id="picker"></select>
-  <span id="status"></span>
+
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1>TradeLoop Autopilot</h1>
+        <p class="subtitle">Autonomous paper execution with visible gates, risk, agents, and history.</p>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="runNow">Run premarket now</button>
+      <button id="refreshNow">Refresh</button>
+      <button class="danger" id="routePaper">Route selected paper run</button>
+      <span class="status-line" id="status">loading...</span>
+    </div>
+  </header>
+
+  <nav class="tabbar" aria-label="Dashboard sections">
+    <button class="active" data-tab="overview">Overview</button>
+    <button data-tab="autopilot">Autopilot</button>
+    <button data-tab="portfolio">Portfolio</button>
+    <button data-tab="decision">Latest Decision</button>
+    <button data-tab="risk">Risk & Gates</button>
+    <button data-tab="agents">Agents</button>
+    <button data-tab="history">History</button>
+  </nav>
+
+  <main>
+    <section id="overview" class="tab-panel active"></section>
+    <section id="autopilot" class="tab-panel"></section>
+    <section id="portfolio" class="tab-panel"></section>
+    <section id="decision" class="tab-panel"></section>
+    <section id="risk" class="tab-panel"></section>
+    <section id="agents" class="tab-panel"></section>
+    <section id="history" class="tab-panel"></section>
+  </main>
 </div>
-<h2>Readiness</h2>
-<div id="readiness" class="statusgrid"></div>
-<h2>Portfolio</h2>
-<div class="tiles" id="tiles"></div>
-<div id="holdings"></div>
-<h2>Transactions</h2>
-<div id="transactions"></div>
-<h2>Latest run</h2>
-<div id="usage"></div>
-<div id="cards"></div>
+
 <script>
-let current = null, timer = null;
+const state = {
+  activeTab: 'overview',
+  currentRun: null,
+  runs: [],
+  status: null,
+  portfolio: null,
+  run: null,
+  refreshTimer: null,
+};
+
+const tabLabels = {
+  overview: 'Overview', autopilot: 'Autopilot', portfolio: 'Portfolio',
+  decision: 'Latest Decision', risk: 'Risk & Gates', agents: 'Agents', history: 'History'
+};
+
+async function refreshAll() {
+  await Promise.all([loadRuns(), loadStatus(), loadPortfolio()]);
+  const latest = state.runs[0] && state.runs[0].dir_name;
+  if (!state.currentRun && latest) state.currentRun = latest;
+  if (state.currentRun) await loadRun(state.currentRun);
+  renderApp();
+  schedulePoll();
+}
 
 async function loadRuns() {
-  const r = await fetch('/api/runs').then(x => x.json());
-  const picker = document.getElementById('picker');
-  picker.innerHTML = '';
-  for (const run of r.runs) {
-    const o = document.createElement('option');
-    o.value = run.dir_name;
-    o.textContent = run.dir_name + '  -  ' + run.decision;
-    picker.appendChild(o);
-  }
-  if (r.runs.length && !current) selectRun(r.runs[0].dir_name);
-}
-
-function selectRun(dir) {
-  current = dir;
-  document.getElementById('picker').value = dir;
-  poll();
-}
-
-async function poll() {
-  if (!current) return;
-  const run = await fetch('/api/run?dir=' + encodeURIComponent(current)).then(x => x.json());
-  render(run);
-  clearTimeout(timer);
-  if (run.live) {
-    document.getElementById('status').textContent = 'live - running...';
-    timer = setTimeout(poll, 1500);
-  } else {
-    document.getElementById('status').textContent = 'complete';
-  }
-}
-
-document.getElementById('routePaper').onclick = async () => {
-  if (!current || !confirm('Route the selected orders in PaperBroker? No live order will be sent.')) return;
-  const result = await fetch('/api/route-paper?dir=' + encodeURIComponent(current)).then(x => x.json());
-  document.getElementById('status').textContent = result.routed
-    ? 'paper orders routed' : (result.output || result.error || 'paper route blocked');
-  await poll();
-};
-
-function point(p) {
-  if (p.startsWith('For: '))
-    return '<li class="arg"><span class="side gain">FOR</span> ' + escapeHtml(p.slice(5)) + '</li>';
-  if (p.startsWith('Against: '))
-    return '<li class="arg"><span class="side loss">AGAINST</span> ' + escapeHtml(p.slice(9)) + '</li>';
-  return '<li>' + escapeHtml(p) + '</li>';
-}
-
-function card(s, extraClass) {
-  const points = (s.points || []).map(point).join('');
-  const model = s.model ? '<span class="model">' + escapeHtml(s.model) + '</span>' : '';
-  return '<div class="card ' + (extraClass || '') + '">'
-    + '<div class="cardhead"><h3>' + escapeHtml(s.title) + '</h3>' + model + '</div>'
-    + '<p class="role">' + escapeHtml(s.role || '') + '</p>'
-    + (s.summary ? '<p class="summary">' + escapeHtml(s.summary) + '</p>' : '')
-    + (points ? '<ul>' + points + '</ul>' : '')
-    + '</div>';
-}
-
-function render(run) {
-  renderUsage(run.usage || {});
-  const html = (run.stages || []).map(s => card(s)).join('')
-    + card(run.decision, 'decision');
-  document.getElementById('cards').innerHTML = html;
-}
-
-function renderUsage(u) {
-  const cost = u.cost_known ? '$' + Number(u.cost_usd || 0).toFixed(6) : 'not reported';
-  const note = u.cost_known ? (u.cost_source === 'estimated_openrouter_pricing'
-    ? 'Estimated from reported tokens and configured OpenRouter model rates.'
-    : 'Provider-reported cost from the run audit log.')
-    : 'No provider cost was reported for this run.';
-  const rows = Object.entries(u.by_stage || {}).map(([stage, v]) =>
-    '<tr><td>' + escapeHtml(stage) + '</td><td class="num">' + v.calls
-    + '</td><td class="num">' + Number(v.total_tokens || 0).toLocaleString('en-IN')
-    + '</td><td class="num">' + (u.cost_known ? '$' + Number(v.cost_usd || 0).toFixed(6) : '-') + '</td></tr>'
-  ).join('');
-  document.getElementById('usage').innerHTML = '<div class="card usage"><div class="cardhead">'
-    + '<h3>LLM Usage</h3><span class="model">' + escapeHtml(cost) + '</span></div>'
-     + '<p class="role">' + u.calls + ' provider call' + (u.calls === 1 ? '' : 's')
-     + (u.by_stage && u.by_stage.codex_orchestrator && u.by_stage.codex_orchestrator.handoffs
-       ? ' · ' + u.by_stage.codex_orchestrator.handoffs + ' expert handoffs' : '')
-     + ' · ' + Number(u.total_tokens || 0).toLocaleString('en-IN')
-    + ' total tokens · ' + u.successful_calls + ' successful · ' + u.failed_calls + ' failed</p>'
-    + '<p class="usage-note">' + escapeHtml(note) + '</p>'
-    + (rows ? '<table><tr><th>Stage</th><th class="num">Calls</th><th class="num">Tokens</th><th class="num">Cost</th></tr>' + rows + '</table>' : '')
-    + '</div>';
-}
-
-function escapeHtml(t) {
-  return String(t).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-const inr = n => n == null ? '-' : '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-const pnl = (n, pct) => {
-  if (n == null) return '-';
-  const cls = n >= 0 ? 'gain' : 'loss', sign = n >= 0 ? '+' : '-';
-  const tail = pct == null ? '' : ' (' + sign + Math.abs(pct).toFixed(2) + '%)';
-  return '<span class="' + cls + '">' + sign + inr(Math.abs(n)) + tail + '</span>';
-};
-const pct = n => n == null ? '-'
-  : '<span class="' + (n >= 0 ? 'gain' : 'loss') + '">' + (n >= 0 ? '+' : '-') + Math.abs(n).toFixed(2) + '%</span>';
-const ist = ts => ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' IST' : '-';
-
-function tile(label, value) {
-  return '<div class="tile"><div class="label">' + escapeHtml(label) + '</div>'
-    + '<div class="value">' + value + '</div></div>';
-}
-
-function statusItem(label, value, cls) {
-  return '<div class="statusitem"><div class="label">' + escapeHtml(label) + '</div>'
-    + '<div class="value ' + cls + '">' + escapeHtml(value) + '</div></div>';
+  const response = await fetch('/api/runs').then(x => x.json()).catch(() => ({ runs: [] }));
+  state.runs = response.runs || [];
 }
 
 async function loadStatus() {
-  const s = await fetch('/api/status').then(x => x.json()).catch(() => null);
-  if (!s) return;
-  const promo = s.live_promotion || {};
-  const sources = s.source_health || {};
-  const latest = s.latest_run || {};
-  document.getElementById('readiness').innerHTML =
-    statusItem('Live env', s.live_trading_env_enabled ? 'enabled' : 'paper-only', s.live_trading_env_enabled ? 'warn' : 'ok')
-    + statusItem('Live promotion', promo.ready ? 'ready' : 'blocked', promo.ready ? 'ok' : 'bad')
-    + statusItem('Paper trades', String(promo.closed_paper_trades || 0), promo.ready ? 'ok' : 'warn')
-    + statusItem('Audit gate', promo.clean_audits ? 'clean' : 'blocked', promo.clean_audits ? 'ok' : 'bad')
-    + statusItem('Source health', sources.ok ? 'fresh' : 'stale: ' + (sources.stale_sources || []).join(', '), sources.ok ? 'ok' : 'bad')
-    + statusItem('Kill switch', s.kill_switch_active ? 'active' : 'off', s.kill_switch_active ? 'bad' : 'ok')
-    + statusItem('Latest approval', latest.approval || 'no run', latest.approval === 'approved' ? 'ok' : latest.approval ? 'warn' : 'warn')
-    + statusItem('Live reconcile', latest.live_reconciliation || 'no run', latest.live_reconciliation === 'clean' ? 'ok' : 'warn');
+  state.status = await fetch('/api/status').then(x => x.json()).catch(() => null);
 }
 
 async function loadPortfolio() {
-  const p = await fetch('/api/portfolio').then(x => x.json()).catch(() => null);
-  if (!p) return;
-  document.getElementById('tiles').innerHTML =
-    tile('Equity', inr(p.equity_inr))
-    + tile('Cash', inr(p.cash_inr))
-    + tile('Invested', inr(p.invested_inr))
-    + tile('Unrealized P&L', pnl(p.unrealized_pnl_inr))
-    + tile('Realized P&L', pnl(p.realized_pnl_inr))
-    + tile('Return', pct(p.return_pct));
-  const note = p.prices_live ? '' : '<p class="pricenote">Live prices unavailable (Zerodha session expired?) - showing book values at buy price.</p>';
-  if (!p.holdings.length) {
-    document.getElementById('holdings').innerHTML = '<p class="pricenote">No open positions.</p>';
-  } else {
-    document.getElementById('holdings').innerHTML = note
-      + '<table><tr><th>Stock</th><th class="num">Qty</th><th class="num">Avg buy</th><th class="num">Now</th>'
-      + '<th class="num">Value</th><th class="num">P&L</th><th class="num">Stop</th><th class="num">To stop</th></tr>'
-      + p.holdings.map(h => '<tr><td>' + escapeHtml(h.symbol) + '</td>'
-        + '<td class="num">' + h.quantity + '</td>'
-        + '<td class="num">' + inr(h.avg_price) + '</td>'
-        + '<td class="num">' + inr(h.ltp) + '</td>'
-        + '<td class="num">' + inr(h.market_value_inr) + '</td>'
-        + '<td class="num">' + pnl(h.unrealized_pnl_inr, h.unrealized_pct) + '</td>'
-        + '<td class="num">' + inr(h.hard_stop) + '</td>'
-        + '<td class="num">' + (h.stop_distance_pct == null ? '-' : h.stop_distance_pct.toFixed(2) + '%') + '</td></tr>').join('')
-      + '</table>';
-  }
-  document.getElementById('transactions').innerHTML = !p.transactions.length
-    ? '<p class="pricenote">No transactions yet.</p>'
-    : '<table><tr><th>When</th><th>Side</th><th>Stock</th><th class="num">Qty</th>'
-      + '<th class="num">Price</th><th class="num">Value</th><th class="num">Costs</th><th class="num">Realized P&L</th></tr>'
-      + p.transactions.map(t => '<tr><td>' + ist(t.ts) + '</td>'
-        + '<td><span class="side">' + escapeHtml(t.side) + '</span></td>'
-        + '<td>' + escapeHtml(t.symbol) + '</td>'
-        + '<td class="num">' + t.quantity + '</td>'
-        + '<td class="num">' + inr(t.price) + '</td>'
-        + '<td class="num">' + inr(t.value_inr) + '</td>'
-        + '<td class="num">' + inr(t.costs_inr) + '</td>'
-        + '<td class="num">' + pnl(t.realized_pnl_inr) + '</td></tr>').join('')
-      + '</table>';
+  state.portfolio = await fetch('/api/portfolio').then(x => x.json()).catch(() => null);
 }
 
-document.getElementById('picker').addEventListener('change', e => selectRun(e.target.value));
-document.getElementById('runNow').addEventListener('click', async () => {
-  document.getElementById('status').textContent = 'starting run...';
-  const r = await fetch('/api/run-now', { method: 'POST' }).then(x => x.json()).catch(() => ({}));
-  if (r.error) { document.getElementById('status').textContent = r.error; return; }
-  setTimeout(async () => { await loadRuns(); await loadStatus(); const p = document.getElementById('picker'); if (p.value) selectRun(p.value); }, 2500);
+async function loadRun(dir) {
+  state.currentRun = dir;
+  state.run = await fetch('/api/run?dir=' + encodeURIComponent(dir)).then(x => x.json()).catch(() => null);
+}
+
+function schedulePoll() {
+  clearTimeout(state.refreshTimer);
+  if (state.run && state.run.live) {
+    state.refreshTimer = setTimeout(refreshAll, 5000);
+    setStatus('run active - refreshing every 5s');
+  } else {
+    setStatus('updated ' + new Date().toLocaleTimeString('en-IN'));
+  }
+}
+
+function renderApp() {
+  for (const tab of Object.keys(tabLabels)) {
+    document.getElementById(tab).classList.toggle('active', state.activeTab === tab);
+  }
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    button.classList.toggle('active', button.dataset.tab === state.activeTab);
+  });
+  renderOverview();
+  renderAutopilot();
+  renderPortfolio();
+  renderLatestDecision();
+  renderRiskAndGates();
+  renderAgents();
+  renderHistory();
+  updateRouteButton();
+}
+
+function renderOverview() {
+  const s = state.status || {};
+  const a = s.autonomy || {};
+  const p = state.portfolio || {};
+  const run = state.run || {};
+  const latest = s.latest_run || {};
+  const exposure = p.exposure || {};
+  const hero = `
+    <div class="hero-grid">
+      ${heroCard('Autopilot', modeLabel(a.effective_mode), modeDetail(a), 'primary')}
+      ${heroCard('Last Cycle', titleCase(run.run_status || latest.approval || 'No run'), decisionLine(run))}
+      ${heroCard('Open Risk', `${num(exposure.open_positions || 0)} / ${exposure.positions_limit || '-'}`, `${pctText(exposure.deployed_pct)} deployed`)}
+      ${heroCard('Data', (s.source_health && s.source_health.ok) ? 'Fresh' : 'Needs Check', sourceDetail(s.source_health))}
+    </div>`;
+  document.getElementById('overview').innerHTML = hero + `
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-header"><div><h2>Latest Decision</h2><p class="tiny">${escapeHtml(state.currentRun || 'No run selected')}</p></div>${statusPill(run.run_status || 'unknown')}</div>
+        <p>${escapeHtml((run.decision && run.decision.summary) || 'No decision has been recorded yet.')}</p>
+        <div class="chips">${(run.orders || []).slice(0, 6).map(orderChip).join('') || '<span class="chip">No proposed orders</span>'}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2>Needs Attention</h2></div>
+        ${attentionList(s.operator_attention || [])}
+      </div>
+    </div>
+    <div class="grid-2">
+      ${portfolioMini(p)}
+      ${gateMini(run.gates || [])}
+    </div>`;
+}
+
+function renderAutopilot() {
+  const s = state.status || {};
+  const a = s.autonomy || {};
+  const promo = s.live_promotion || {};
+  document.getElementById('autopilot').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h2>Autopilot State</h2><p class="tiny">Paper-first autonomous execution. Live stays locked by config.</p></div>${statusPill(a.effective_mode || 'unknown')}</div>
+      <div class="metric-grid">
+        ${metric('Approval mode', a.approval_mode || '-')}
+        ${metric('Paper auto-route', a.paper_auto_route ? 'On' : 'Off')}
+        ${metric('Live env', a.live_trading_env_enabled ? 'Enabled' : 'Off')}
+        ${metric('Allow auto live', a.allow_auto_live ? 'Yes' : 'No')}
+        ${metric('Kill switch', s.kill_switch_active ? 'Active' : 'Off', s.kill_switch_active ? 'loss' : 'gain')}
+        ${metric('Live promotion', promo.ready ? 'Ready' : 'Blocked', promo.ready ? 'gain' : 'loss')}
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h2>Live Promotion Reasons</h2></div>
+      ${(promo.reasons || []).length ? '<ul class="points">' + promo.reasons.map(r => '<li>' + escapeHtml(r) + '</li>').join('') + '</ul>' : '<div class="empty">No promotion blockers reported.</div>'}
+    </div>`;
+}
+
+function renderPortfolio() {
+  const p = state.portfolio || {};
+  document.getElementById('portfolio').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h2>Portfolio</h2><p class="tiny">${p.prices_live ? 'Live prices active' : 'Book values shown when live prices are unavailable'}</p></div></div>
+      <div class="metric-grid">
+        ${metric('Equity', inr(p.equity_inr))}
+        ${metric('Cash', inr(p.cash_inr))}
+        ${metric('Invested', inr(p.invested_inr))}
+        ${metric('Unrealized P&L', pnl(p.unrealized_pnl_inr))}
+        ${metric('Realized P&L', pnl(p.realized_pnl_inr))}
+        ${metric('Return', pct(p.return_pct))}
+      </div>
+    </div>
+    <div class="panel"><div class="panel-header"><h2>Holdings</h2></div>${holdingsTable(p.holdings || [])}</div>
+    <div class="panel"><div class="panel-header"><h2>Transactions</h2></div>${transactionsTable(p.transactions || [])}</div>`;
+}
+
+function renderLatestDecision() {
+  const run = state.run || {};
+  document.getElementById('decision').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h2>What The Bot Decided</h2><p class="tiny">${escapeHtml(run.dir || 'No run')}</p></div>${statusPill(run.run_status || 'unknown')}</div>
+      <p>${escapeHtml((run.decision && run.decision.summary) || 'No decision recorded.')}</p>
+    </div>
+    <div class="panel"><div class="panel-header"><h2>Orders And Route Outcome</h2></div>${ordersTable(run.orders || [], run.fills || [])}</div>`;
+}
+
+function renderRiskAndGates() {
+  const run = state.run || {};
+  const p = state.portfolio || {};
+  const exposure = p.exposure || {};
+  document.getElementById('risk').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><h2>Gate Timeline</h2><p class="tiny">Structured run outcome, not terminal log scraping.</p></div>
+      <div class="gate-timeline">${(run.gates || []).map(gateRow).join('') || '<div class="empty">No gate summary for this run yet.</div>'}</div>
+    </div>
+    <div class="grid-2">
+      <div class="panel"><div class="panel-header"><h2>Exposure</h2></div><div class="metric-grid">
+        ${metric('Deployed', pct(exposure.deployed_pct))}
+        ${metric('Open positions', `${num(exposure.open_positions || 0)} / ${exposure.positions_limit || '-'}`)}
+        ${metric('Route processed', num((run.route_summary || {}).processed || 0))}
+        ${metric('Filled', num((run.route_summary || {}).filled || 0), 'gain')}
+      </div></div>
+      <div class="panel"><div class="panel-header"><h2>Sector Exposure</h2></div>${sectorTable(exposure.sector_exposure || [])}</div>
+    </div>`;
+}
+
+function renderAgents() {
+  const run = state.run || {};
+  const usage = run.usage || {};
+  const byStage = usage.by_stage || {};
+  document.getElementById('agents').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h2>Agent Timeline</h2><p class="tiny">${num(usage.total_tokens || 0)} tokens · ${usage.cost_known ? '$' + Number(usage.cost_usd || 0).toFixed(6) : 'cost not reported'}</p></div></div>
+      <div class="agent-timeline">${(run.stages || []).map(stage => agentRow(stage, byStage[stage.stage] || {})).join('') || '<div class="empty">No agent stages have rendered yet.</div>'}</div>
+    </div>`;
+}
+
+function renderHistory() {
+  document.getElementById('history').innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h2>Run History</h2><p class="tiny">Choose a run to inspect in the Decision, Risk, and Agents tabs.</p></div></div>
+      <div class="history-list">${state.runs.map(historyItem).join('') || '<div class="empty">No runs found.</div>'}</div>
+    </div>`;
+  document.querySelectorAll('[data-run]').forEach(button => {
+    button.onclick = async () => { await loadRun(button.dataset.run); state.activeTab = 'decision'; renderApp(); schedulePoll(); };
+  });
+}
+
+function heroCard(label, value, detail, extra = '') {
+  return `<div class="hero-card ${extra}"><div class="label">${escapeHtml(label)}</div><div class="hero-value">${escapeHtml(value)}</div><div class="hero-detail">${escapeHtml(detail || '')}</div></div>`;
+}
+
+function metric(label, value, cls = '') {
+  return `<div class="metric"><div class="label">${escapeHtml(label)}</div><div class="value ${cls}">${value}</div></div>`;
+}
+
+function statusPill(status) {
+  const safe = String(status || 'unknown');
+  return `<span class="pill ${classForStatus(safe)}">${escapeHtml(titleCase(safe))}</span>`;
+}
+
+function gateRow(g) {
+  return `<div class="gate-row"><div>${statusPill(g.status || 'unknown')}</div><div><strong>${escapeHtml(g.label || g.id || 'Gate')}</strong><div class="tiny">${escapeHtml(g.detail || '')}</div></div><div class="tiny">${escapeHtml(g.severity || 'info')}</div></div>`;
+}
+
+function agentRow(stage, usage) {
+  const points = (stage.points || []).slice(0, 8).map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  return `<div class="agent-row"><div><strong>${escapeHtml(stage.title || stage.stage)}</strong><div class="tiny">${escapeHtml(stage.role || '')}</div></div><div><div>${escapeHtml(stage.summary || 'No summary')}</div>${points ? '<ul class="points">' + points + '</ul>' : ''}</div><div class="tiny">${escapeHtml(stage.model || 'model n/a')}<br>${num(usage.total_tokens || 0)} tokens</div></div>`;
+}
+
+function orderChip(o) {
+  return `<span class="chip">${escapeHtml(o.side || 'BUY')} ${escapeHtml(o.quantity || '?')} ${escapeHtml(o.ticker || o.symbol || '?')} @ ${escapeHtml(o.price || '?')}</span>`;
+}
+
+function attentionList(items) {
+  if (!items.length) return '<div class="empty">No operator action needed right now.</div>';
+  return '<div class="gate-timeline">' + items.map(item => `<div class="gate-row"><div>${statusPill(item.severity || 'info')}</div><div><strong>${escapeHtml(item.title || '')}</strong><div class="tiny">${escapeHtml(item.detail || '')}</div></div><div></div></div>`).join('') + '</div>';
+}
+
+function portfolioMini(p) {
+  return `<div class="panel"><div class="panel-header"><h2>Portfolio Snapshot</h2></div><div class="metric-grid">${metric('Equity', inr(p.equity_inr))}${metric('Cash', inr(p.cash_inr))}${metric('P&L', pnl(p.unrealized_pnl_inr))}${metric('Return', pct(p.return_pct))}</div></div>`;
+}
+
+function gateMini(gates) {
+  return `<div class="panel"><div class="panel-header"><h2>Gate Outcome</h2></div><div class="gate-timeline">${gates.slice(-5).map(gateRow).join('') || '<div class="empty">No gates recorded yet.</div>'}</div></div>`;
+}
+
+function holdingsTable(rows) {
+  if (!rows.length) return '<div class="empty">No open positions.</div>';
+  return `<div class="data-wrap"><table><tr><th>Stock</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">Now</th><th class="num">Value</th><th class="num">P&L</th><th class="num">Stop</th><th class="num">To Stop</th></tr>${rows.map(h => `<tr><td>${escapeHtml(h.symbol)}</td><td class="num">${num(h.quantity)}</td><td class="num">${inr(h.avg_price)}</td><td class="num">${inr(h.ltp)}</td><td class="num">${inr(h.market_value_inr)}</td><td class="num">${pnl(h.unrealized_pnl_inr, h.unrealized_pct)}</td><td class="num">${inr(h.hard_stop)}</td><td class="num">${h.stop_distance_pct == null ? '-' : h.stop_distance_pct.toFixed(2) + '%'}</td></tr>`).join('')}</table></div>`;
+}
+
+function transactionsTable(rows) {
+  if (!rows.length) return '<div class="empty">No transactions yet.</div>';
+  return `<div class="data-wrap"><table><tr><th>When</th><th>Side</th><th>Stock</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Value</th><th class="num">Costs</th><th class="num">Realized P&L</th></tr>${rows.map(t => `<tr><td>${ist(t.ts)}</td><td>${statusPill(t.side || '')}</td><td>${escapeHtml(t.symbol)}</td><td class="num">${num(t.quantity)}</td><td class="num">${inr(t.price)}</td><td class="num">${inr(t.value_inr)}</td><td class="num">${inr(t.costs_inr)}</td><td class="num">${pnl(t.realized_pnl_inr)}</td></tr>`).join('')}</table></div>`;
+}
+
+function ordersTable(orders, fills) {
+  if (!orders.length) return '<div class="empty">No proposed orders for this run.</div>';
+  const bySymbol = {};
+  for (const fill of fills || []) bySymbol[(fill.payload && fill.payload.symbol) || fill.symbol || ''] = fill;
+  return `<div class="data-wrap"><table><tr><th>Stock</th><th>Side</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Stop</th><th class="num">Target</th><th>Strategy</th><th>Status</th><th>Reason</th></tr>${orders.map(o => {
+    const sym = o.ticker || o.symbol || '';
+    const f = bySymbol[sym] || {};
+    return `<tr><td>${escapeHtml(sym)}</td><td>${statusPill(o.side || '')}</td><td class="num">${num(o.quantity)}</td><td class="num">${inr(o.price)}</td><td class="num">${inr(o.hard_stop)}</td><td class="num">${inr(o.target_1)}</td><td>${escapeHtml(o.strategy_family || '-')}</td><td>${statusPill(f.status || 'proposed')}</td><td>${escapeHtml(o.reason || ((f.payload && (f.payload.reasons || []).join(', ')) || ''))}</td></tr>`;
+  }).join('')}</table></div>`;
+}
+
+function sectorTable(rows) {
+  if (!rows.length) return '<div class="empty">Sector exposure unavailable or no open positions.</div>';
+  return `<div class="data-wrap"><table><tr><th>Sector</th><th class="num">Value</th><th class="num">% Equity</th></tr>${rows.map(r => `<tr><td>${escapeHtml(r.sector)}</td><td class="num">${inr(r.market_value_inr)}</td><td class="num">${pct(r.equity_pct)}</td></tr>`).join('')}</table></div>`;
+}
+
+function historyItem(run) {
+  const active = run.dir_name === state.currentRun ? ' active' : '';
+  return `<button class="history-item${active}" data-run="${escapeHtml(run.dir_name)}"><strong>${escapeHtml(run.dir_name)}</strong><span>${statusPill(run.mode || '-')}</span><span class="muted">${escapeHtml(run.decision || '')}</span></button>`;
+}
+
+function modeLabel(mode) {
+  return ({ paper_autonomous: 'Paper Auto', paper_human_loop: 'Paper Review', live_locked: 'Live Locked', live_auto_enabled: 'Live Auto', halted: 'Halted' })[mode] || 'Unknown';
+}
+
+function modeDetail(a) {
+  if (!a) return '';
+  if (a.effective_mode === 'paper_autonomous') return 'Runs and paper routes after gates pass.';
+  if (a.effective_mode === 'live_locked') return 'Live env on, but auto-live is disabled.';
+  if (a.effective_mode === 'halted') return 'Kill switch is active.';
+  return 'Approval mode: ' + (a.approval_mode || 'unknown');
+}
+
+function decisionLine(run) {
+  return (run.decision && run.decision.summary) || 'No completed run selected.';
+}
+
+function sourceDetail(source) {
+  if (!source) return 'source status unavailable';
+  return source.ok ? 'source-health checks are fresh' : 'stale: ' + (source.stale_sources || []).join(', ');
+}
+
+function updateRouteButton() {
+  const button = document.getElementById('routePaper');
+  const run = state.run || {};
+  const hasOrders = (run.orders || []).length > 0;
+  button.disabled = !state.currentRun || !hasOrders || run.run_status === 'routed';
+}
+
+function setStatus(text) { document.getElementById('status').textContent = text; }
+function classForStatus(status) { return String(status).toLowerCase().replace(/[^a-z0-9_]+/g, '_'); }
+function titleCase(text) { return String(text).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+function escapeHtml(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function num(n) { return Number(n || 0).toLocaleString('en-IN'); }
+function inr(n) { return n == null ? '-' : '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
+function pnl(n, pctValue) {
+  if (n == null) return '-';
+  const sign = n >= 0 ? '+' : '-';
+  const tail = pctValue == null ? '' : ` (${sign}${Math.abs(pctValue).toFixed(2)}%)`;
+  return `<span class="${n >= 0 ? 'gain' : 'loss'}">${sign}${inr(Math.abs(n))}${tail}</span>`;
+}
+function pct(n) { return n == null ? '-' : `<span class="${Number(n) >= 0 ? 'gain' : 'loss'}">${Number(n).toFixed(2)}%</span>`; }
+function pctText(n) { return n == null ? '-' : Number(n).toFixed(2) + '%'; }
+function ist(ts) { return ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' IST' : '-'; }
+
+document.querySelectorAll('[data-tab]').forEach(button => {
+  button.onclick = () => { state.activeTab = button.dataset.tab; renderApp(); };
 });
 
-loadRuns();
-loadStatus();
-loadPortfolio();
+document.getElementById('refreshNow').onclick = refreshAll;
+document.getElementById('runNow').onclick = async () => {
+  setStatus('starting premarket run...');
+  const result = await fetch('/api/run-now', { method: 'POST' }).then(x => x.json()).catch(() => ({}));
+  if (result.error) { setStatus(result.error); return; }
+  setTimeout(refreshAll, 2500);
+};
+document.getElementById('routePaper').onclick = async () => {
+  if (!state.currentRun || !confirm('Route the selected run through PaperBroker? No live order will be sent.')) return;
+  setStatus('routing paper order...');
+  const result = await fetch('/api/route-paper?dir=' + encodeURIComponent(state.currentRun)).then(x => x.json()).catch(() => ({}));
+  setStatus(result.routed ? 'paper route complete' : (result.output || result.error || 'paper route blocked'));
+  await refreshAll();
+};
+
+refreshAll();
 </script>
