@@ -69,7 +69,7 @@ Market Evidence
  Deterministic Gates
          │
          ▼
-   Human Approval
+   Policy Approval
          │
          ▼
     Paper Broker
@@ -114,7 +114,7 @@ flowchart TD
     RISK --> PM[Portfolio Manager]
 
     PM --> GATES[Deterministic Python Gates]
-    GATES --> APPROVAL[Human / Policy Approval]
+    GATES --> APPROVAL[Policy Approval]
     APPROVAL --> BROKER[Paper Broker]
 
     BROKER --> MEMORY[Ledger + Memory]
@@ -321,7 +321,7 @@ flowchart LR
     P --> Q[Quality Gate]
     Q --> R[Risk Engine]
     R --> M[Mode Policy]
-    M --> H[Approval]
+    M --> H[Auto/Human Policy]
     H --> B[Paper Broker]
 ```
 
@@ -338,7 +338,7 @@ Proposed Order
      │
      └── Valid
            ↓
-      Await Approval
+      Auto-route paper or await exception review
 ```
 
 **LLM confidence alone is never sufficient authorization.**
@@ -471,7 +471,7 @@ Existing Positions
        ↓
 Holdings Review
        ↓
-Hold / Trim / Exit / Tighten Stop
+Hold / Add / Trim / Exit / Tighten Stop
 ```
 
 ### Post-close
@@ -564,6 +564,7 @@ runs/<cycle>/
 ├── 41_pm_decision.json
 │
 ├── orders.json
+├── gate_summary.json
 ├── fills.json
 └── audit artifacts
 ```
@@ -609,14 +610,15 @@ cp .env.example .env
 npm run auth:zerodha -- --listen
 ```
 
-Run a complete multi-agent premarket cycle:
+Run a complete multi-agent premarket cycle.
+By default, TradeLoop runs in autonomous paper mode: valid paper orders route automatically after deterministic gates pass, while live auto-routing stays locked unless explicitly enabled.
 
 ```bash id="txdlrw"
 ZERODHA_ENABLE_DATA=true \
 python -m tradeloop.orchestrator premarket
 ```
 
-The system reasons and produces a proposal, then stops:
+The system reasons, validates the decision, and either auto-routes paper orders or records the exact blocking gate:
 
 ```text id="t8knxq"
 Agents
@@ -625,10 +627,12 @@ PM Decision
    ↓
 Orders Proposal
    ↓
-AWAITING_APPROVAL
+Deterministic Gates
+   ↓
+Paper Auto-Route / Blocked / Exception Review
 ```
 
-Approve and route the paper proposal explicitly:
+You can still manually route a selected paper run from the dashboard or CLI when reviewing an exception:
 
 ```bash id="l9ojup"
 python -m tradeloop.orchestrator route \
@@ -639,14 +643,14 @@ python -m tradeloop.orchestrator route \
 
 # Dashboard
 
-The reasoning and portfolio state can also be inspected through the local dashboard.
+The dynamic operator dashboard shows autopilot state, latest decision, gates, risk exposure, agents, portfolio, and run history.
 
 ```bash id="j8b312"
 python -m tradeloop.dashboard
 ```
 
 ```text id="by6h7n"
-http://127.0.0.1:8765
+http://127.0.0.1:8770
 ```
 
 ---
@@ -689,7 +693,7 @@ Decision Agent
    ↓
 Deterministic Validation
    ↓
-Human / Policy Approval
+Auto/Human Policy Approval
    ↓
 Action
    ↓
