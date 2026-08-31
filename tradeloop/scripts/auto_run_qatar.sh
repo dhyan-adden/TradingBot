@@ -6,6 +6,7 @@ PY="${TRADELOOP_PYTHON:-/Users/dhyanpatel/anaconda3/envs/tradingbot/bin/python}"
 BACKEND="${TRADELOOP_BACKEND:-opencode}"
 AUTO_ROUTE_PAPER="${TRADELOOP_AUTO_ROUTE_PAPER:-false}"
 MODE="${1:-}"
+export ZERODHA_ENABLE_TRADING=false
 
 case "$MODE" in
   premarket|intraday|postclose) ;;

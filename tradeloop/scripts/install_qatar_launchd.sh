@@ -71,11 +71,51 @@ PLIST
   launchctl bootstrap "gui/$UID_VALUE" "$plist"
 }
 
+install_health_job() {
+  local label="com.tradeloop.qatar-health"
+  local plist="$LAUNCH_AGENTS/$label.plist"
+
+  cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$label</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/dhyanpatel/anaconda3/envs/tradingbot/bin/python</string>
+    <string>$PROJECT_ROOT/tradeloop/scripts/check_schedule_health.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$PROJECT_ROOT</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>14</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>$LOG_DIR/$label.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$LOG_DIR/$label.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
+PLIST
+
+  plutil -lint "$plist" >/dev/null
+  launchctl bootstrap "gui/$UID_VALUE" "$plist"
+}
+
 LABELS=(
   com.tradeloop.qatar-premarket
   com.tradeloop.qatar-intraday-10
   com.tradeloop.qatar-intraday-13
   com.tradeloop.qatar-postclose
+  com.tradeloop.qatar-health
 )
 
 for label in "${LABELS[@]}"; do
@@ -86,6 +126,7 @@ install_job com.tradeloop.qatar-premarket 6 30 premarket true
 install_job com.tradeloop.qatar-intraday-10 10 0 intraday true
 install_job com.tradeloop.qatar-intraday-13 13 0 intraday true
 install_job com.tradeloop.qatar-postclose 13 30 postclose false
+install_health_job
 
 echo "Installed TradeLoop Qatar launchd jobs."
-echo "Schedule: 06:30 premarket, 10:00 intraday, 13:00 intraday, 13:30 postclose."
+echo "Schedule: 06:30 premarket, 10:00 intraday, 13:00 intraday, 13:30 postclose, 14:15 health."

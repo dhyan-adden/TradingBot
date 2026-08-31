@@ -124,5 +124,5 @@ live_promotion_gates:
   min_expectancy_r: 0.3
   max_drawdown_pct: 8
 
-cycle_timeout_seconds: 1800  # 11 sequential claude -p stages (opus x4) over the full
-                             # uncapped setup scan; ~40-120s/call, so 30min headroom.
+cycle_timeout_seconds: 3600  # OpenCode retries can consume most of 30 minutes before
+                              # the decision stages; allow the full DAG one hour.

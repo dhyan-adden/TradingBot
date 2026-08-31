@@ -42,9 +42,22 @@ def completed_modes(root: Path, day) -> set[str]:
         if not run_dir.is_dir():
             continue
         for mode in SCHEDULES:
-            if _run_date(run_dir.name, mode) == day:
+            if _run_date(run_dir.name, mode) == day and _run_completed(run_dir):
                 out.add(mode)
     return out
+
+
+def _run_completed(run_dir: Path) -> bool:
+    if (run_dir / "reasoning_error.txt").exists() or (run_dir / "ingest_error.txt").exists():
+        return False
+    summary_path = run_dir / "gate_summary.json"
+    if not summary_path.exists():
+        return True
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return summary.get("phase") != "failed"
 
 
 def missed_modes(root: Path, now: datetime | None = None,

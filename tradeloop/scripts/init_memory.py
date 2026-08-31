@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 FILES = {
-    "memory/lessons_learned.md": "# Lessons Learned\n\n",
-    "memory/manager_feedback.md": "# Manager Feedback\n\n",
-    "memory/trade_journal.md": "# Trade Journal\n\n",
+    "memory/lessons_learned.md": "# Lessons Learned\n",
+    "memory/manager_feedback.md": "# Manager Feedback\n",
+    "memory/trade_journal.md": "# Trade Journal\n",
     "memory/strategy_performance.md": (
         "# Strategy Performance\n\n"
         "live_ready: false\n"
@@ -16,7 +16,7 @@ FILES = {
         "| Strategy | Trades | Win Rate | Expectancy R | Max Drawdown % | Confidence |\n"
         "| --- | ---: | ---: | ---: | ---: | --- |\n"
     ),
-    "memory/macro_view.md": "# Macro View\n\n",
+    "memory/macro_view.md": "# Macro View\n",
 }
 
 

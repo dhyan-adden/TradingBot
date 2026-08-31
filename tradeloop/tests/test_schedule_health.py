@@ -24,6 +24,18 @@ def test_schedule_health_ignores_completed_cycle(tmp_path):
     assert missed == []
 
 
+def test_schedule_health_flags_failed_cycle(tmp_path):
+    root = tmp_path / "tradeloop"
+    run_dir = root / "runs" / "2026-08-18_0801_premarket"
+    run_dir.mkdir(parents=True)
+    (run_dir / "gate_summary.json").write_text(
+        json.dumps({"phase": "failed"}), encoding="utf-8")
+
+    missed = missed_modes(root, datetime(2026, 8, 18, 9, 0, tzinfo=IST))
+
+    assert missed == ["premarket"]
+
+
 def test_missed_cycle_alert_is_deduped_per_day_and_mode(tmp_path):
     root = tmp_path / "tradeloop"
     missed = ["premarket"]
