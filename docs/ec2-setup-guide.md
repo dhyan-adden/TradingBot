@@ -1468,6 +1468,36 @@ ssh -i /Volumes/D-DRIVE/TB/p2.pem ubuntu@13.53.253.22
 ssh tradeloop
 ```
 
+## Dashboard SSH forwarding
+
+Use a different dashboard port on EC2 so it does not collide with the local Mac dashboard.
+
+```bash
+ssh -L 8771:127.0.0.1:8771 tradeloop
+```
+
+On the EC2 shell, start the dashboard on the forwarded port:
+
+```bash
+python -m tradeloop.dashboard --port 8771
+```
+
+On the Mac, open:
+
+```text
+http://127.0.0.1:8771
+```
+
+Keep the local Mac dashboard on the default port:
+
+```bash
+python -m tradeloop.dashboard
+```
+
+```text
+http://127.0.0.1:8770
+```
+
 ## Check public IP
 
 ```bash

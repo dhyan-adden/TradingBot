@@ -30,7 +30,7 @@ from typing import Dict, Iterable, List, Optional
 import pandas as pd
 import yaml
 
-from tradeloop.lib.data.kite import Candle
+from tradeloop.lib.data.kite import Candle, KiteAuthError
 from tradeloop.lib.ta.indicators import add_indicators
 from tradeloop.lib.ta.patterns import (
     breakout,
@@ -468,6 +468,8 @@ def scan_universe(
             hits = scan_symbol(symbol, kite_client, as_of,
                                min_turnover_inr=min_turnover_inr,
                                min_stop_pct=min_stop_pct)
+        except KiteAuthError:
+            raise
         except _TOLERATED as exc:
             log.warning("scan skipped %s: %s", symbol, exc)
             continue

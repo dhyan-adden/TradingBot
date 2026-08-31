@@ -1,8 +1,11 @@
 import json
+from io import BytesIO
 from datetime import date
 from pathlib import Path
 
-from tradeloop.lib.data.kite import KiteClient, Candle
+import pytest
+
+from tradeloop.lib.data.kite import Candle, KiteAuthError, StdioTransport, KiteClient
 
 FX = Path("tradeloop/tests/data/fixtures")
 
@@ -41,3 +44,49 @@ def test_historical_resolves_token_then_parses_candles():
     assert ("zerodha_instrument_token", {"exchange": "NSE", "tradingsymbol": "INFY"}) in [
         (n, a) for n, a in ft.calls
     ]
+
+
+def test_stdio_transport_surfaces_mcp_auth_error_without_json_decode():
+    transport = StdioTransport.__new__(StdioTransport)
+    transport._rpc = lambda *_a, **_k: {
+        "isError": True,
+        "content": [{
+            "type": "text",
+            "text": "Kite API 403: {\"error_type\":\"TokenException\"}",
+        }],
+    }
+
+    with pytest.raises(KiteAuthError, match="Zerodha authentication failed"):
+        transport.call_tool("zerodha_ltp", {"instruments": ["NSE:RELIANCE"]})
+
+
+def test_stdio_transport_non_json_success_is_loud_runtime_error():
+    transport = StdioTransport.__new__(StdioTransport)
+    transport._rpc = lambda *_a, **_k: {
+        "content": [{"type": "text", "text": "not json"}],
+    }
+
+    with pytest.raises(RuntimeError, match="returned non-JSON output"):
+        transport.call_tool("zerodha_ltp", {"instruments": ["NSE:RELIANCE"]})
+
+
+def test_stdio_transport_launches_mcp_from_repo_root(monkeypatch):
+    captured = {}
+
+    class FakeProc:
+        stdin = BytesIO()
+        stdout = BytesIO()
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["cwd"] = kwargs.get("cwd")
+        return FakeProc()
+
+    monkeypatch.setattr("tradeloop.lib.data.kite.subprocess.Popen", fake_popen)
+    monkeypatch.setattr(StdioTransport, "_rpc", lambda self, method, params: {})
+    monkeypatch.setattr(StdioTransport, "_notify", lambda self, method, params: None)
+
+    StdioTransport()
+
+    assert captured["cmd"] == ["npm", "run", "-s", "mcp:zerodha"]
+    assert captured["cwd"] == str(Path(__file__).resolve().parents[3])

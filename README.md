@@ -653,6 +653,27 @@ python -m tradeloop.dashboard
 http://127.0.0.1:8770
 ```
 
+Use a different port when running another dashboard through SSH forwarding:
+
+```bash
+python -m tradeloop.dashboard --port 8771
+```
+
+Or set it through the environment:
+
+```bash
+TRADELOOP_DASHBOARD_PORT=8771 python -m tradeloop.dashboard
+```
+
+For EC2 forwarding, keep the dashboard bound to the EC2 loopback address and forward a different local port:
+
+```bash
+ssh -L 8771:127.0.0.1:8771 tradeloop
+python -m tradeloop.dashboard --port 8771
+```
+
+Then open `http://127.0.0.1:8771` on the Mac.
+
 ---
 
 # Why TradeLoop Exists

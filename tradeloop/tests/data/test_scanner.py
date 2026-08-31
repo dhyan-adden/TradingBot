@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from tradeloop.lib.data.kite import Candle
+from tradeloop.lib.data.kite import Candle, KiteAuthError
 from tradeloop.lib.ta import scanner
 
 
@@ -83,3 +83,12 @@ def test_scan_universe_reraises_unexpected():
 
     with pytest.raises(KeyError):
         scanner.scan_universe(["A"], Boom(), date(2026, 7, 1), max_fetch=5)
+
+
+def test_scan_universe_reraises_auth_failure_without_per_symbol_skip():
+    class AuthBoom:
+        def historical(self, *a, **k):
+            raise KiteAuthError("Zerodha authentication failed")
+
+    with pytest.raises(KiteAuthError, match="Zerodha authentication failed"):
+        scanner.scan_universe(["A", "B"], AuthBoom(), date(2026, 7, 1), max_fetch=5)

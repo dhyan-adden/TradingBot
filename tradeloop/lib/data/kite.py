@@ -7,6 +7,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import IO, List, Protocol, cast
 
 
@@ -24,14 +25,26 @@ class Transport(Protocol):
     def call_tool(self, name: str, arguments: dict) -> dict: ...
 
 
+class KiteAuthError(RuntimeError):
+    pass
+
+
+def _is_auth_error(text: str) -> bool:
+    lower = text.lower()
+    return "tokenexception" in lower or "api_key" in lower or "access_token" in lower
+
+
 class StdioTransport:
     """Minimal MCP stdio JSON-RPC: spawn `tsx src/mcp/zerodha.ts`, initialize, tools/call.
     ponytail: newline-delimited JSON-RPC by hand; adopt the official mcp python client
     only if streaming/notifications are ever needed."""
 
-    def __init__(self, command=("npm", "run", "-s", "mcp:zerodha"), timeout_seconds: float = 45.0):
+    def __init__(self, command=("npm", "run", "-s", "mcp:zerodha"), timeout_seconds: float = 45.0,
+                 cwd: "Path | str | None" = None):
+        repo_root = Path(cwd) if cwd is not None else Path(__file__).resolve().parents[3]
         self._proc = subprocess.Popen(
-            list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
+            list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0,
+            cwd=str(repo_root)
         )
         self._stdin = cast(IO[bytes], self._proc.stdin)
         self._stdout = cast(IO[bytes], self._proc.stdout)
@@ -89,8 +102,18 @@ class StdioTransport:
     def call_tool(self, name: str, arguments: dict) -> dict:
         result = self._rpc("tools/call", {"name": name, "arguments": arguments})
         # server returns {"content":[{"type":"text","text":"<json>"}]}
-        text = result["content"][0]["text"]
-        return json.loads(text)
+        text = str(result.get("content", [{}])[0].get("text", ""))
+        if result.get("isError"):
+            if _is_auth_error(text):
+                raise KiteAuthError(
+                    "Zerodha authentication failed: Kite rejected the api_key/access_token; "
+                    "refresh with `npm run auth:zerodha -- --auto` or `npm run auth:zerodha -- --listen`"
+                )
+            raise RuntimeError(f"kite MCP tool {name} failed: {text}")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"kite MCP tool {name} returned non-JSON output") from exc
 
     def close(self) -> None:
         try:
