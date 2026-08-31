@@ -86,6 +86,37 @@ def test_pm_decision_falls_back_to_bedrock_glm_when_openai_model_fails(tmp_path,
     assert records[-1]["model"] == "opencode:amazon-bedrock/zai.glm-5"
 
 
+def test_free_opencode_model_fails_over_after_one_short_attempt(tmp_path, monkeypatch):
+    calls = []
+    timeouts = []
+
+    def fake_run(argv, **kwargs):
+        model = argv[argv.index("--model") + 1]
+        calls.append(model)
+        timeouts.append(kwargs["timeout"])
+        if model == "opencode/nemotron-3-ultra-free":
+            return types.SimpleNamespace(returncode=1, stderr="free model unavailable", stdout="")
+        return types.SimpleNamespace(
+            returncode=0,
+            stderr="",
+            stdout=_event(json.dumps(GOOD_SHORTLIST), model=model),
+        )
+
+    monkeypatch.setattr(opencode_client.subprocess, "run", fake_run)
+    client = OpenCodeStageClient(
+        audit_path=tmp_path / "llm_calls.jsonl",
+        max_retries=2,
+        backoff_base=0.0,
+        cwd=tmp_path,
+    )
+
+    out = client.call_json("10_news", "system", "user", Shortlist)
+
+    assert isinstance(out, Shortlist)
+    assert calls == ["opencode/nemotron-3-ultra-free", "openrouter/deepseek/deepseek-v4-flash-0731"]
+    assert timeouts == [180.0, 420.0]
+
+
 def test_pm_decision_uses_second_bedrock_fallback_when_glm_fails(tmp_path, monkeypatch):
     calls = []
 

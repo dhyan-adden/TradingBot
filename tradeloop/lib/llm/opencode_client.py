@@ -26,6 +26,8 @@ _NO_TOOLS_PREAMBLE = (
     "do NOT inspect files beyond the attached prompt, and do NOT ask follow-up "
     "questions. Output ONLY the JSON object specified by the prompt.\n\n"
 )
+_FREE_OPENCODE_PREFIX = "opencode/"
+_FREE_MODEL_TIMEOUT_SECONDS = 180.0
 
 
 class OpenCodeStageClient:
@@ -76,16 +78,18 @@ class OpenCodeStageClient:
         last_exc: Exception | None = None
 
         for m in models:
-            for attempt in range(self.max_retries):
+            attempts = 1 if _is_free_opencode_model(m) else self.max_retries
+            for attempt in range(attempts):
                 try:
-                    text, envelope = self._run_opencode(m, stage_prompt)
+                    text, envelope = self._run_opencode(
+                        m, stage_prompt, timeout=self._timeout_for_model(m))
                     obj = _parse_json_object(text)
                     validated = schema.model_validate(obj)
                 except (subprocess.TimeoutExpired, subprocess.SubprocessError,
                         RuntimeError, ValueError, ValidationError) as exc:
                     last_exc = exc
                     self._record(_failed_record(role, f"opencode:{m}", prompt, str(exc)))
-                    if attempt < self.max_retries - 1:
+                    if attempt < attempts - 1:
                         time.sleep(self.backoff_base * (2 ** attempt))
                     continue
                 usage = _usage_from_envelope(envelope)
@@ -110,7 +114,12 @@ class OpenCodeStageClient:
         raise LLMValidationError(
             f"{role} failed on opencode models {models} after {self.max_retries} tries each: {last_exc}")
 
-    def _run_opencode(self, model: str, stage_prompt: str) -> tuple[str, dict[str, Any]]:
+    def _timeout_for_model(self, model: str) -> float:
+        if _is_free_opencode_model(model):
+            return min(self.per_call_timeout, _FREE_MODEL_TIMEOUT_SECONDS)
+        return self.per_call_timeout
+
+    def _run_opencode(self, model: str, stage_prompt: str, *, timeout: float) -> tuple[str, dict[str, Any]]:
         import os
         import dotenv
 
@@ -127,7 +136,7 @@ class OpenCodeStageClient:
             ],
             capture_output=True,
             text=True,
-            timeout=self.per_call_timeout,
+            timeout=timeout,
             cwd=self.cwd,
             env=env,
         )
@@ -146,6 +155,10 @@ def _discover_project_root(path: Path) -> Path:
         if any((parent / name).exists() for name in ("opencode.jsonc", "opencode.json", ".git")):
             return parent
     return Path.cwd()
+
+
+def _is_free_opencode_model(model: str) -> bool:
+    return model.startswith(_FREE_OPENCODE_PREFIX)
 
 
 def _last_json_event(stdout: str) -> dict[str, Any]:
