@@ -1,3 +1,0 @@
-# 22 Debate
-
-Pending.

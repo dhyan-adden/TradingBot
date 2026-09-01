@@ -1,2 +1,0 @@
-{"ticker": "CDSL", "setup_type": "20d_breakout", "cleanliness_score": 6.0, "entry_zone": "1444.90", "stop_zone": "1390.73", "target_zone": "1517.13/1553.24", "volume_context": "volume_normal"}
-{"ticker": "SBIN", "setup_type": "ema20_pullback", "cleanliness_score": 4.0, "entry_zone": "1036.70", "stop_zone": "1006.91", "target_zone": "1076.42/1096.28", "volume_context": "volume_normal"}

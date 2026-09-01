@@ -1,3 +1,0 @@
-# 13 Technical
-
-Pending.

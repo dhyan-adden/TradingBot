@@ -1,1 +1,0 @@
-reasoning failed at 12_fundamentals: 12_fundamentals failed on claude:sonnet after 3 tries: claude -p exit 1: 
