@@ -17,7 +17,7 @@ from tradeloop.lib.config import load_settings, risk_caps
 def test_load_settings_and_risk_caps_mapping() -> None:
     settings = load_settings(ROOT / "config" / "settings.yaml")
     assert settings.paper_starting_inr == 100000
-    assert settings.max_open_positions == 4
+    assert settings.max_open_positions == 6
     assert settings.max_position_pct == 25
     assert settings.max_total_deployed_pct == 90
     assert settings.max_sector_pct == 50  # raised 2026-07-07: user-approved two-bank entry
@@ -27,7 +27,7 @@ def test_load_settings_and_risk_caps_mapping() -> None:
 
     caps = risk_caps(settings, ["RELIANCE", "TCS"], capital_inr=250000.0)
     assert caps.capital_inr == 250000.0
-    assert caps.max_open_positions == 4
+    assert caps.max_open_positions == 6
     assert caps.max_position_allocation_pct == 25
     assert caps.max_total_deployed_pct == 90
     assert caps.max_sector_allocation_pct == 50

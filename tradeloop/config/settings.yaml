@@ -2,7 +2,7 @@ capital:
   paper_starting_inr: 100000
   per_trade_risk_pct: 1.5
   max_open_risk_pct: 4.0
-  max_concurrent_positions: 4
+  max_concurrent_positions: 6
   min_position_size_inr: 15000
   max_position_pct: 25
   max_sector_exposure_pct: 50  # raised from 40 on 2026-07-07: user-approved two-bank

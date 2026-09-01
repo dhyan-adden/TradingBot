@@ -40,15 +40,16 @@ def test_rejects_oversized_position(tmp_path: Path) -> None:
     assert "max_position_allocation_exceeded" in _reasons(routed[0])
 
 
-def test_rejects_fifth_concurrent_position(tmp_path: Path) -> None:
+def test_rejects_seventh_concurrent_position(tmp_path: Path) -> None:
     book = tmp_path / "state" / "paper_book.jsonl"
     seed = PaperBroker(cash_inr=10_000_000, slippage_bps=0)
-    for sym, px in [("RELIANCE", 1000), ("TCS", 1000), ("HDFCBANK", 1000), ("INFY", 1000)]:
+    for sym, px in [("RELIANCE", 1000), ("TCS", 1000), ("HDFCBANK", 1000),
+                    ("INFY", 1000), ("SBIN", 1000), ("SUNPHARMA", 1000)]:
         fill = seed.place_order(OrderTicket(sym, "BUY", 1, px))
         append(book, [fill])
     broker = hydrate(book, starting_cash_inr=10_000_000)
     orders, fills = _write(tmp_path, {"orders": [
-        {"ticker": "ICICIBANK", "side": "BUY", "quantity": 10, "price": 1000}]})
+        {"ticker": "ICICIBANK", "side": "BUY", "quantity": 15, "price": 1000}]})
     routed = route_orders_file(orders, fills, broker, SETTINGS, root=ROOT)
     assert routed[0].status == "RISK_REJECTED"
     assert "max_open_positions_exceeded" in _reasons(routed[0])
