@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 from tradeloop.dashboard.render import (
@@ -302,14 +303,41 @@ def _manager_backchannel(run_dir: Path) -> dict | None:
     return raw if isinstance(raw, dict) else None
 
 
+def active_run_dirs(runs_dir: Path) -> list[Path]:
+    """Return only runs created in the current fresh-start campaign."""
+    runs_dir = Path(runs_dir)
+    if not runs_dir.is_dir():
+        return []
+    archive_dir = runs_dir.parent / "state" / "archive"
+    boundaries = []
+    for archive in archive_dir.glob("fresh-start-*"):
+        try:
+            boundaries.append(datetime.strptime(
+                archive.name.removeprefix("fresh-start-"), "%Y%m%d_%H%M%S"))
+        except ValueError:
+            continue
+    boundary = max(boundaries, default=None)
+    dirs = [p for p in runs_dir.iterdir() if p.is_dir()]
+    if boundary is None:
+        return sorted(dirs, key=lambda p: p.name, reverse=True)
+    active = []
+    for run_dir in dirs:
+        try:
+            run_time = datetime.strptime(run_dir.name[:15], "%Y-%m-%d_%H%M")
+        except ValueError:
+            continue
+        if run_time >= boundary.replace(second=0):
+            active.append(run_dir)
+    return sorted(active, key=lambda p: p.name, reverse=True)
+
+
 
 def list_runs(runs_dir: Path) -> list[RunSummary]:
     runs_dir = Path(runs_dir)
     if not runs_dir.exists():
         return []
     out = []
-    for d in sorted((p for p in runs_dir.iterdir() if p.is_dir()),
-                    key=lambda p: p.name, reverse=True):
+    for d in active_run_dirs(runs_dir):
         # same truthfulness rules as read_run: an unfinished run is not a "hold"
         orders = _load(d / "orders.json") or {}
         if (d / "reasoning_error.txt").exists():

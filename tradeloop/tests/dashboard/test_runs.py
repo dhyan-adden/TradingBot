@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from tradeloop.dashboard.runs import list_runs, read_run
+from tradeloop.dashboard.runs import active_run_dirs, list_runs, read_run
 
 
 def _make_run(runs_dir: Path, name: str, with_decision: bool):
@@ -21,6 +21,18 @@ def test_list_runs_newest_first(tmp_path):
     runs = list_runs(tmp_path)
     assert [r.dir_name for r in runs][0] == "2026-07-04_0900_premarket"
     assert runs[0].mode == "premarket"
+
+
+def test_active_run_dirs_respects_latest_fresh_start(tmp_path):
+    runs_dir = tmp_path / "tradeloop" / "runs"
+    archive = runs_dir.parent / "state" / "archive" / "fresh-start-20260831_165900"
+    archive.mkdir(parents=True)
+    _make_run(runs_dir, "2026-08-31_1600_postclose", True)
+    _make_run(runs_dir, "2026-09-01_0923_premarket", True)
+
+    assert [p.name for p in active_run_dirs(runs_dir)] == [
+        "2026-09-01_0923_premarket"
+    ]
 
 
 def test_read_run_complete_has_stages_and_decision(tmp_path):

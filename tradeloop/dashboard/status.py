@@ -11,6 +11,7 @@ from tradeloop.lib.config import load_settings
 from tradeloop.lib.live.promotion import evaluate_live_promotion
 from tradeloop.lib.risk.circuit_breaker import kill_switch_active
 from tradeloop.scripts.verify_setup import source_health
+from tradeloop.dashboard.runs import active_run_dirs
 
 
 def _load_json(path: Path) -> dict | list | None:
@@ -32,7 +33,7 @@ def _proposed_order_count(run_dir: Path) -> int:
 def _latest_run(runs_dir: Path) -> dict | None:
     if not runs_dir.is_dir():
         return None
-    runs = sorted((p for p in runs_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+    runs = active_run_dirs(runs_dir)
     if not runs:
         return None
     run_dir = runs[0]
